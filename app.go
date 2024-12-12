@@ -196,6 +196,24 @@ func deleteSiteFromYamlFile(filename string, name, url string) error {
 	return nil
 }
 
+func deleteScheduleFromYamlFile(filename string, name string) error {
+	headerSchedule, err := readScheduleYamlFile(filename)
+	if err != nil {
+		return err
+	}
+
+	var updatedSchedules []Schedule
+	for _, schedule := range headerSchedule.Schedules {
+		if schedule.Name != name {
+			updatedSchedules = append(updatedSchedules, schedule)
+		}
+	}
+	headerSchedule.Schedules = updatedSchedules
+
+	writeAndSave(filename, headerSchedule)
+	return nil
+}
+
 // Function to update the expiry time for blocked sites
 func updateExpiryTime(filename string, url string, newExpiryTime time.Time, alreadyExists bool) error {
 	newExpiryTimeStr := newExpiryTime.Format("2006-01-02 15:04:05 -0700")
@@ -266,7 +284,7 @@ func displayStatus(fileName string) {
 }
 
 func showMenu() {
-	fmt.Println("\n=== SelfControl Menu ===")
+	fmt.Println("\n====== SelfControl Menu ======")
 	fmt.Println("1. Start new block")
 	fmt.Println("2. Show current status")
 	fmt.Println("3. Edit expiry time for blocked sites")
@@ -278,7 +296,9 @@ func showMenu() {
 	fmt.Println("9: Delete site from yaml configuration")
 	fmt.Println("10: Load schedule")
 	fmt.Println("11: Add new schedule")
-	fmt.Print("\nEnter your choice (1-5): ")
+	fmt.Println("12: Delete schedule")
+	fmt.Println("13: Edit schedule")
+	fmt.Print("\nEnter your choice (1-13): ")
 }
 
 func readUserInput(reader *bufio.Reader) string {
@@ -381,6 +401,42 @@ func editblockedStatusOnYamlFile(filename string, url string, status bool) error
 
 	writeAndSave(filename, headerSites)
 
+	return nil
+}
+
+func editSchedulesonYamlFile(filename string, name string, field string, option string) error {
+	headerSchedule, err := readScheduleYamlFile(filename)
+	if err != nil {
+		return err
+	}
+
+outer:
+	for i := range headerSchedule.Schedules {
+		switch option {
+		case "1":
+			if headerSchedule.Schedules[i].Name == name {
+				headerSchedule.Schedules[i].Name = field
+				break outer
+			}
+		case "2":
+			if headerSchedule.Schedules[i].Name == name {
+				headerSchedule.Schedules[i].Days = strings.Split(field, ",")
+				break outer
+			}
+		case "3":
+			if headerSchedule.Schedules[i].Name == name {
+				headerSchedule.Schedules[i].StartTime = field
+				break outer
+			}
+		case "4":
+			if headerSchedule.Schedules[i].Name == name {
+				headerSchedule.Schedules[i].EndTime = field
+				break outer
+			}
+		}
+
+	}
+	writeAndSave(filename, headerSchedule)
 	return nil
 }
 
@@ -504,7 +560,6 @@ func main() {
 		wg.Wait()
 		showMenu()
 		choice := readUserInput(reader)
-		fmt.Println(goroutineContexts)
 		switch choice {
 		case "1":
 			fmt.Println("Chosen to block sites")
@@ -514,7 +569,7 @@ func main() {
 
 			// Calculate expiry time
 			expiryTime := time.Now().Add(duration)
-			fmt.Println("Expiry Time: ", expiryTime)
+			fmt.Print("Expiry Time: ", expiryTime)
 
 			// Block sites
 			if err := blockSites(true, sitesFileLocation, "", expiryTime); err != nil {
@@ -535,9 +590,9 @@ func main() {
 			fmt.Println("Chosen to show current status")
 			displayStatus("blocked-sites.yaml")
 		case "3":
-			fmt.Println("Enter which site to change expiry time")
+			fmt.Print("Enter which site to change expiry time")
 			site := readUserInput(reader)
-			fmt.Println("Enter new expiry time")
+			fmt.Print("Enter new expiry time")
 			newExpiryTime := time.Now().Add(getDuration(reader))
 			if err := updateExpiryTime("blocked-sites.yaml", site, newExpiryTime, true); err != nil {
 				fmt.Printf("Error updating expiry time: %v\n", err)
@@ -570,7 +625,7 @@ func main() {
 			expiryTime := time.Now().Add(parsedDuration)
 			name := GetNameFromURL(site)
 			formattedExpiryTime := expiryTime.Format("2006-01-02 15:04:05 -0700")
-			fmt.Println("Expiry Time: ", formattedExpiryTime)
+			fmt.Print("Expiry Time: ", formattedExpiryTime)
 			writeToYamlFile("blocked-sites.yaml", name, site, formattedExpiryTime) //ADD DELETESITEFROMYAML TO THIS FUNCTION
 			blockSites(false, "blocked-sites.yaml", site, expiryTime)
 		case "9": // Delete site from yaml configuration
@@ -587,43 +642,18 @@ func main() {
 				fmt.Printf("Error reading schedule file: %v\n", err)
 				continue
 			}
-			fmt.Println("Enter name of schedule: ")
+			fmt.Print("Enter name of schedule: ")
 			name := readUserInput(reader)
 			// Check if today is Monday
 			loadSchedule(headerSchedule, name, currentTime)
 
 		case "11":
-			fmt.Println("Enter name of schedule: ")
+			fmt.Print("Enter name of schedule: ")
 			name := readUserInput(reader)
-			fmt.Println("Enter days to block seperated by commas: ")
+			fmt.Print("Enter days to block seperated by commas: ")
 			days := strings.TrimSpace(readUserInput(reader))
-			var startTimeFormatted string
-			for {
-				fmt.Println("Enter start time: ")
-				startTime := readUserInput(reader)
-				var err error
-				startTimeFormatted, err = FormatTime(startTime)
-				if err != nil {
-					fmt.Println(err)
-					continue
-				} else {
-					break
-				}
-			}
-
-			var endTimeFormatted string
-			var err error
-			for {
-				fmt.Println("Enter end time: ")
-				endTime := readUserInput(reader)
-				endTimeFormatted, err = FormatTime(endTime)
-				if err != nil {
-					fmt.Println(err)
-					continue
-				} else {
-					break
-				}
-			}
+			startTimeFormatted := queryForTime(reader, true)
+			endTimeFormatted := queryForTime(reader, false)
 			var cleanedDays []string
 			re := regexp.MustCompile(`\s*,\s*|\s+`)
 			splitDays := re.Split(days, -1)
@@ -634,8 +664,64 @@ func main() {
 			}
 
 			writeToScheduleYamlFile("schedules.yaml", name, cleanedDays, startTimeFormatted, endTimeFormatted)
+
+		case "12":
+			fmt.Print("Enter name of schedule to delete: ")
+			name := readUserInput(reader)
+			if err := deleteScheduleFromYamlFile("schedules.yaml", name); err != nil {
+				fmt.Printf("Error deleting schedule: %v\n", err)
+			}
+
+		case "13":
+			fmt.Print("Enter name of schedule to edit: ")
+			name := readUserInput(reader)
+			fmt.Print("Enter option to edit(1: Edit name 2: Edit days 3: Edit start time 4: Edit end time): ")
+			option := readUserInput(reader)
+			fmt.Print("Enter field to edit: ")
+			var field string
+			if option == "3" || option == "4" {
+				field = queryForTime(reader, true)
+			} else {
+				field = queryForTime(reader, false)
+			}
+			if err := editSchedulesonYamlFile("schedules.yaml", name, field, option); err != nil {
+				fmt.Printf("Error editing schedule: %v\n", err)
+			}
+
 		default:
 			fmt.Println("Invalid choice. Please try again.")
 		}
 	}
+}
+
+func queryForTime(reader *bufio.Reader, startTime bool) string {
+	var time string
+	if startTime {
+		for {
+			fmt.Print("Enter start time: ")
+			startTime := readUserInput(reader)
+			var err error
+			time, err = FormatTime(startTime)
+			if err != nil {
+				fmt.Println(err)
+				continue
+			} else {
+				break
+			}
+		}
+	} else {
+		var err error
+		for {
+			fmt.Print("Enter end time: ")
+			endTime := readUserInput(reader)
+			time, err = FormatTime(endTime)
+			if err != nil {
+				fmt.Println(err)
+				continue
+			} else {
+				break
+			}
+		}
+	}
+	return time
 }

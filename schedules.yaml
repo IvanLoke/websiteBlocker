@@ -1,7 +1,16 @@
 schedules:
   - name: work
     days:
+      - monday
+      - tuesday
+      - wednesday
       - thursday
       - friday
-    startTime: "08:00"
+    startTime: "12:00"
     endTime: "17:00"
+  - name: something
+    days:
+      - monday
+      - tuesday
+    startTime: "13:00"
+    endTime: "18:00"
