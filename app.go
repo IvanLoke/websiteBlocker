@@ -18,14 +18,12 @@ var (
 	wg                sync.WaitGroup
 )
 
-var prefixes = [3]string{"www.", "https://", "http://"}
-var suffixes = [2]string{".com", ".org"}
-
 // Site represents a single site to block
 type Site struct {
-	Name     string `yaml:"name"`
-	URL      string `yaml:"url"`
-	Duration string `yaml:"duration"`
+	Name             string `yaml:"name"`
+	URL              string `yaml:"url"`
+	Duration         string `yaml:"duration"`
+	CurrentlyBlocked bool   `yaml:"currentlyBlocked"`
 }
 
 // Header of yaml file with all sites
@@ -48,22 +46,6 @@ func readYamlFile(filename string) (HeaderSite, error) {
 		return HeaderSite{}, err
 	}
 	return headerSites, nil
-}
-
-// Function to format sites from yaml file
-func formatString(data string) string {
-	return strings.TrimSpace(strings.ToLower(data))
-}
-
-// Function to extract name from url
-func getNameFromURL(url string) string {
-	for _, prefix := range prefixes {
-		url = strings.TrimPrefix(url, prefix)
-	}
-	for _, suffix := range suffixes {
-		url = strings.TrimSuffix(url, suffix)
-	}
-	return formatString(url)
 }
 
 // Function to add new goroutine when editing or adding to yaml file
@@ -97,7 +79,7 @@ func addNewGoroutine(url string, expiryTime time.Time) {
 func writeToYamlFile(filename string, name string, url string, expiryTimeString string, expiryTime time.Time) error {
 	// Read yaml file
 	headerSites, err := readYamlFile(filename)
-	formatted_url := formatString(url)
+	formatted_url := FormatString(url)
 	if err != nil {
 		return err
 	}
@@ -111,9 +93,10 @@ func writeToYamlFile(filename string, name string, url string, expiryTimeString 
 
 	// Add new site to yaml file
 	newSite := Site{
-		Name:     formatString(name),
-		URL:      formatted_url,
-		Duration: expiryTimeString,
+		Name:             FormatString(name),
+		URL:              formatted_url,
+		Duration:         expiryTimeString,
+		CurrentlyBlocked: false,
 	}
 	headerSites.Sites = append(headerSites.Sites, newSite)
 
@@ -244,7 +227,7 @@ func displayStatus(fileName string) {
 			return
 		}
 
-		if parsedTime.Before(time.Now()) {
+		if parsedTime.Before(time.Now()) || !site.CurrentlyBlocked {
 			continue
 		}
 		empty = false
@@ -291,6 +274,181 @@ func getDuration(reader *bufio.Reader) time.Duration {
 		}
 		return duration
 	}
+}
+
+// Function to block sites using the specified YAML file and update the /etc/hosts file
+func blockSites(all bool, yamlFile string, specificSite string) error {
+	var sites []string
+
+	headerSites, err := readYamlFile(yamlFile)
+	if err != nil {
+		return fmt.Errorf("error reading YAML file: %w", err)
+	}
+
+	if all {
+		// Read sites from the specified YAML file
+
+		// Prepare hosts file entries
+		for _, site := range headerSites.Sites {
+			sites = append(sites, site.URL)
+			editblockedStatusOnYamlFile(yamlFile, site.URL, true)
+		}
+	} else {
+		sites = append(sites, specificSite)
+		editblockedStatusOnYamlFile(yamlFile, specificSite, true)
+	}
+
+	// Update the hosts file with the new entries
+	if err := updateHostsFile(sites); err != nil {
+		return fmt.Errorf("error updating hosts file: %w", err)
+	}
+
+	return nil
+}
+
+// Function to update the hosts file
+func updateHostsFile(sites []string) error {
+	// Read the current contents of the hosts file
+	content, err := os.ReadFile("/etc/hosts")
+	if err != nil {
+		return err
+	}
+
+	// Open the hosts file for appending
+	file, err := os.OpenFile("/etc/hosts", os.O_APPEND|os.O_WRONLY, 0644)
+	if err != nil {
+		return err
+	}
+	defer file.Close() // Ensure the file is closed once at the end
+
+	// Check if the marker already exists
+	if !strings.Contains(string(content), "# Added by selfcontrol") {
+		// Add the marker
+		if _, err := file.WriteString("\n# Added by selfcontrol\n"); err != nil {
+			return err
+		}
+	}
+
+	// Add new entries to the hosts file
+	for _, site := range sites {
+		if !strings.Contains(string(content), site) {
+			if _, err := file.WriteString(fmt.Sprintf("127.0.0.1 %s\n", site)); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func editblockedStatusOnYamlFile(filename string, url string, status bool) error {
+	headerSites, err := readYamlFile(filename)
+	if err != nil {
+		return err
+	}
+
+	for i := range headerSites.Sites {
+		if headerSites.Sites[i].URL == url {
+			headerSites.Sites[i].CurrentlyBlocked = status
+			break
+		}
+	}
+
+	file, err := os.OpenFile(filename, os.O_RDWR|os.O_TRUNC, 0644)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	encoder := yaml.NewEncoder(file)
+	if err := encoder.Encode(&headerSites); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// Removes all entries inside etc/hosts that were added by selfcontrol
+func cleanup(all bool, url string) error {
+	// Read etc/hosts file
+	content, err := os.ReadFile(hostsFile)
+	if err != nil {
+		return fmt.Errorf("error reading hosts file: %v", err)
+	}
+
+	if !all && url == "" {
+		return fmt.Errorf("empty URL")
+	}
+
+	// Read sites from the specified YAML file
+	var sites []string
+	if all {
+		headerSites, err := readYamlFile("blocked-sites.yaml")
+		if err != nil {
+			return err
+		}
+
+		// Prepare hosts file entries
+		for _, site := range headerSites.Sites {
+			sites = append(sites, site.URL)
+			editblockedStatusOnYamlFile("blocked-sites.yaml", site.URL, false)
+			removeGouroutine(site.URL)
+		}
+	} else {
+		sites = append(sites, url)
+		editblockedStatusOnYamlFile("blocked-sites.yaml", url, false)
+		removeGouroutine(url)
+	}
+
+	// Removing entries
+	lines := strings.Split(string(content), "\n")
+	var newLines []string
+	removeExtraLine := false
+	for _, line := range lines {
+		if !all && strings.Contains(line, "# Added by selfcontrol") {
+			newLines = append(newLines, line)
+			continue
+		}
+		if !strings.Contains(line, "# Added by selfcontrol") {
+			shouldKeep := true
+			for i := 0; i < len(sites); {
+				site := sites[i]
+				if strings.Contains(line, site) {
+					// Remove the site from the sites array
+					sites = append(sites[:i], sites[i+1:]...) // Remove the matched site
+					shouldKeep = false
+					break
+				} else {
+					i++ // Only increment if no removal
+				}
+			}
+			if shouldKeep {
+				newLines = append(newLines, line)
+			}
+		} else {
+			removeExtraLine = true
+		}
+	}
+
+	if all && removeExtraLine {
+		newLines = newLines[:len(newLines)-1]
+	}
+	// Write back to hosts file
+	return os.WriteFile(hostsFile, []byte(strings.Join(newLines, "\n")), 0644)
+}
+
+// Function to remove goroutine for a specific site
+func removeGouroutine(url string) {
+	mu.Lock()
+	wg.Add(1)
+	if cancel, exists := goroutineContexts[url]; exists { //accessing the goroutine map to find the correct cancel() function for the url
+		cancel() // Cancelling the goroutine using the cancel function found in the map
+		delete(goroutineContexts, url)
+		fmt.Printf("\nCancelled goroutine for site: %s\n", url)
+	}
+	wg.Done()
+	mu.Unlock()
+	wg.Wait()
 }
 
 func main() {
@@ -354,7 +512,6 @@ func main() {
 				fmt.Printf("Error unblocking site: %v\n", err)
 				continue
 			}
-			deleteSiteFromYamlFile("blocked-sites.yaml", "", site)
 			fmt.Println("Unblocked site: ", site)
 		case "8": // Add new site to block
 			fmt.Print("Enter site URL: ")
@@ -367,7 +524,7 @@ func main() {
 				continue
 			}
 			expiryTime := time.Now().Add(parsedDuration)
-			name := getNameFromURL(site)
+			name := GetNameFromURL(site)
 			formattedExpiryTime := expiryTime.Format("2006-01-02 15:04:05 -0700")
 			fmt.Println("Expiry Time: ", formattedExpiryTime)
 			writeToYamlFile("blocked-sites.yaml", name, site, formattedExpiryTime, expiryTime) //ADD DELETESITEFROMYAML TO THIS FUNCTION
@@ -379,165 +536,9 @@ func main() {
 				fmt.Printf("Error deleting site: %v\n", err)
 			}
 		case "a":
-			fmt.Println(getNameFromURL("www.youtube.com"))
-		case "q":
-			originalTimeStr := "2006-01-02 15:04:05.999999999 -0700 -07 m=+14.614541400"
-
-			// Define the original layout
-			originalLayout := "2006-01-02 15:04:05.999999999 -0700 -07 m=+14.614541400"
-
-			// Parse the original time string
-			parsedTime, err := time.Parse(originalLayout, originalTimeStr)
-			if err != nil {
-				fmt.Println("Error parsing time:", err)
-				return
-			}
-
-			// Define the new layout, adjusting for the abbreviation and dropping nanosecond precision
-			newLayout := "2006-01-02 15:04:05 -0700"
-
-			// Format the parsed time to the new layout
-			formattedTime := parsedTime.Format(newLayout)
-
-			fmt.Println("Transformed Time:", formattedTime)
+			fmt.Println(GetNameFromURL("www.youtube.com"))
 		default:
 			fmt.Println("Invalid choice. Please try again.")
 		}
 	}
-}
-
-// Function to block sites using the specified YAML file and update the /etc/hosts file
-func blockSites(all bool, yamlFile string, specificSite string) error {
-	var sites []string
-
-	if all {
-		// Read sites from the specified YAML file
-		headerSites, err := readYamlFile(yamlFile)
-		if err != nil {
-			return fmt.Errorf("error reading YAML file: %w", err)
-		}
-
-		// Prepare hosts file entries
-		for _, site := range headerSites.Sites {
-			sites = append(sites, site.URL)
-		}
-	} else {
-		sites = append(sites, specificSite)
-	}
-	// Update the hosts file with the new entries
-	if err := updateHostsFile(sites); err != nil {
-		return fmt.Errorf("error updating hosts file: %w", err)
-	}
-
-	return nil
-}
-
-// Function to update the hosts file
-func updateHostsFile(sites []string) error {
-	// Read the current contents of the hosts file
-	content, err := os.ReadFile("/etc/hosts")
-	if err != nil {
-		return err
-	}
-
-	// Open the hosts file for appending
-	file, err := os.OpenFile("/etc/hosts", os.O_APPEND|os.O_WRONLY, 0644)
-	if err != nil {
-		return err
-	}
-	defer file.Close() // Ensure the file is closed once at the end
-
-	// Check if the marker already exists
-	if !strings.Contains(string(content), "# Added by selfcontrol") {
-		// Add the marker
-		if _, err := file.WriteString("# Added by selfcontrol\n"); err != nil {
-			return err
-		}
-	}
-
-	// Add new entries to the hosts file
-	for _, site := range sites {
-		if !strings.Contains(string(content), site) {
-			if _, err := file.WriteString(fmt.Sprintf("127.0.0.1 %s\n", site)); err != nil {
-				return err
-			}
-		}
-	}
-
-	return nil
-}
-
-// Removes all entries inside etc/hosts that were added by selfcontrol
-func cleanup(all bool, url string) error {
-	// Read etc/hosts file
-	content, err := os.ReadFile(hostsFile)
-	if err != nil {
-		return fmt.Errorf("error reading hosts file: %v", err)
-	}
-
-	if !all && url == "" {
-		return fmt.Errorf("empty URL")
-	}
-
-	// Read sites from the specified YAML file
-	var sites []string
-	if all {
-		headerSites, err := readYamlFile("blocked-sites.yaml")
-		if err != nil {
-			return err
-		}
-
-		// Prepare hosts file entries
-		for _, site := range headerSites.Sites {
-			sites = append(sites, site.URL)
-			removeGouroutine(site.URL)
-		}
-	} else {
-		sites = append(sites, url)
-		removeGouroutine(url)
-	}
-
-	// Removing entries
-	lines := strings.Split(string(content), "\n")
-	var newLines []string
-	for _, line := range lines {
-		if !all && strings.Contains(line, "# Added by selfcontrol") {
-			newLines = append(newLines, line)
-			continue
-		}
-		if !strings.Contains(line, "# Added by selfcontrol") {
-			shouldKeep := true
-			for i := 0; i < len(sites); {
-				site := sites[i]
-				if strings.Contains(line, site) {
-					// Remove the site from the sites array
-					sites = append(sites[:i], sites[i+1:]...) // Remove the matched site
-					shouldKeep = false
-					break
-				} else {
-					i++ // Only increment if no removal
-				}
-			}
-			if shouldKeep {
-				newLines = append(newLines, line)
-			}
-		}
-	}
-
-	// Write back to hosts file
-	return os.WriteFile(hostsFile, []byte(strings.Join(newLines, "\n")), 0644)
-}
-
-// Function to remove goroutine for a specific site
-func removeGouroutine(url string) {
-	mu.Lock()
-	wg.Add(1)
-	if cancel, exists := goroutineContexts[url]; exists { //accessing the goroutine map to find the correct cancel() function for the url
-		cancel() // Cancelling the goroutine using the cancel function found in the map
-		delete(goroutineContexts, url)
-		fmt.Printf("\nCancelled goroutine for site: %s\n", url)
-	}
-	wg.Done()
-	mu.Unlock()
-	wg.Wait()
 }
