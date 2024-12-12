@@ -1,4 +1,7 @@
 schedules:
-  - days: [Monday, Tuesday, Wednesday, Thursday, Friday]
-    startTime: 08:00
-    endTime: 17:00
+  - name: work
+    days:
+      - thursday
+      - friday
+    startTime: "08:00"
+    endTime: "17:00"

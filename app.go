@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -36,6 +37,7 @@ type HeaderSchedule struct {
 }
 
 type Schedule struct {
+	Name      string   `yaml:"name"`
 	Days      []string `yaml:"days"`
 	StartTime string   `yaml:"startTime"`
 	EndTime   string   `yaml:"endTime"`
@@ -119,7 +121,7 @@ func writeAndSave(filename string, data interface{}) error {
 }
 
 // Function to write to yaml file
-func writeToYamlFile(filename string, name string, url string, expiryTimeString string, expiryTime time.Time) error {
+func writeToYamlFile(filename string, name string, url string, expiryTimeString string) error {
 	// Read yaml file
 	headerSites, err := readBlockedYamlFile(filename)
 	formatted_url := FormatString(url)
@@ -146,18 +148,17 @@ func writeToYamlFile(filename string, name string, url string, expiryTimeString 
 	// Write to original file
 	writeAndSave(filename, headerSites)
 
-	// Add new gourotine for new site
-	addNewGoroutine(url, expiryTime)
 	return nil
 }
 
-func writeToScheduleYamlFile(filename string, days []string, startTime string, endTime string) error {
+func writeToScheduleYamlFile(filename string, name string, days []string, startTime string, endTime string) error {
 	headerSchedule, err := readScheduleYamlFile(filename)
 	if err != nil {
 		return err
 	}
 
 	newSchedule := Schedule{
+		Name:      name,
 		Days:      days,
 		StartTime: startTime,
 		EndTime:   endTime,
@@ -228,8 +229,7 @@ func updateExpiryTime(filename string, url string, newExpiryTime time.Time, alre
 	if alreadyExists { // bool to check if the site already exists in config, if it does, we need to update the goroutine. If it does not ie. startup, skip
 		fmt.Printf("Updated expiry time for site: %s to %v", url, newExpiryTimeStr)
 		cleanup(false, url)
-		blockSites(false, filename, url)
-		addNewGoroutine(url, newExpiryTime)
+		blockSites(false, filename, url, newExpiryTime)
 	}
 	return nil
 }
@@ -276,6 +276,8 @@ func showMenu() {
 	fmt.Println("7: Unblock specific sites")
 	fmt.Println("8: Add new site to block")
 	fmt.Println("9: Delete site from yaml configuration")
+	fmt.Println("10: Load schedule")
+	fmt.Println("11: Add new schedule")
 	fmt.Print("\nEnter your choice (1-5): ")
 }
 
@@ -298,7 +300,7 @@ func getDuration(reader *bufio.Reader) time.Duration {
 }
 
 // Function to block sites using the specified YAML file and update the /etc/hosts file
-func blockSites(all bool, yamlFile string, specificSite string) error {
+func blockSites(all bool, yamlFile string, specificSite string, expiryTime time.Time) error {
 	var sites []string
 
 	headerSites, err := readBlockedYamlFile(yamlFile)
@@ -313,9 +315,11 @@ func blockSites(all bool, yamlFile string, specificSite string) error {
 		for _, site := range headerSites.Sites {
 			sites = append(sites, site.URL)
 			editblockedStatusOnYamlFile(yamlFile, site.URL, true)
+			addNewGoroutine(site.URL, expiryTime)
 		}
 	} else {
 		sites = append(sites, specificSite)
+		addNewGoroutine(specificSite, expiryTime)
 		editblockedStatusOnYamlFile(yamlFile, specificSite, true)
 	}
 
@@ -449,6 +453,35 @@ func cleanup(all bool, url string) error {
 	return os.WriteFile(hostsFile, []byte(strings.Join(newLines, "\n")), 0644)
 }
 
+func loadSchedule(data HeaderSchedule, name string, currentTime time.Time) {
+	for _, schedule := range data.Schedules {
+		if schedule.Name == name {
+			fmt.Printf("Found schedule %s\n", name)
+			for _, day := range schedule.Days {
+				if strings.ToLower(currentTime.Weekday().String()) == day && currentTime.Format("15:04") >= schedule.StartTime && currentTime.Format("15:04") <= schedule.EndTime {
+					fmt.Println("Today is Thursday. Time to block sites!")
+					endTime, err := time.Parse("15:04", schedule.EndTime)
+					if err != nil {
+						fmt.Printf("Error parsing end time: %v\n", err)
+						continue
+					}
+					finalEndTime := time.Date(currentTime.Year(), currentTime.Month(), currentTime.Day(), endTime.Hour(), endTime.Minute(), endTime.Second(), 0, currentTime.Location())
+					blockSites(true, "blocked-sites.yaml", "", finalEndTime)
+					var headerSite HeaderSite
+					headerSite, err = readBlockedYamlFile("blocked-sites.yaml")
+					if err != nil {
+						fmt.Printf("Error reading blocked sites: %v\n", err)
+					}
+					for _, site := range headerSite.Sites {
+						updateExpiryTime("blocked-sites.yaml", site.URL, finalEndTime, false)
+						editblockedStatusOnYamlFile("blocked-sites.yaml", site.URL, true)
+					}
+				}
+			}
+		}
+	}
+}
+
 // Function to remove goroutine for a specific site
 func removeGouroutine(url string) {
 	mu.Lock()
@@ -471,7 +504,7 @@ func main() {
 		wg.Wait()
 		showMenu()
 		choice := readUserInput(reader)
-
+		fmt.Println(goroutineContexts)
 		switch choice {
 		case "1":
 			fmt.Println("Chosen to block sites")
@@ -484,7 +517,7 @@ func main() {
 			fmt.Println("Expiry Time: ", expiryTime)
 
 			// Block sites
-			if err := blockSites(true, sitesFileLocation, ""); err != nil {
+			if err := blockSites(true, sitesFileLocation, "", expiryTime); err != nil {
 				fmt.Printf("Error blocking sites: %v\n", err)
 				continue
 			}
@@ -496,7 +529,6 @@ func main() {
 			}
 			for _, site := range headerSites.Sites {
 				updateExpiryTime(sitesFileLocation, site.URL, expiryTime, false)
-				addNewGoroutine(site.URL, expiryTime)
 			}
 
 		case "2":
@@ -539,8 +571,8 @@ func main() {
 			name := GetNameFromURL(site)
 			formattedExpiryTime := expiryTime.Format("2006-01-02 15:04:05 -0700")
 			fmt.Println("Expiry Time: ", formattedExpiryTime)
-			writeToYamlFile("blocked-sites.yaml", name, site, formattedExpiryTime, expiryTime) //ADD DELETESITEFROMYAML TO THIS FUNCTION
-			blockSites(false, "blocked-sites.yaml", site)
+			writeToYamlFile("blocked-sites.yaml", name, site, formattedExpiryTime) //ADD DELETESITEFROMYAML TO THIS FUNCTION
+			blockSites(false, "blocked-sites.yaml", site, expiryTime)
 		case "9": // Delete site from yaml configuration
 			fmt.Print("Enter site to delete from Config: ")
 			site := readUserInput(reader)
@@ -548,10 +580,60 @@ func main() {
 			if err := deleteSiteFromYamlFile("blocked-sites.yaml", "", site); err != nil {
 				fmt.Printf("Error deleting site: %v\n", err)
 			}
-		case "a":
-			something, _ := readScheduleYamlFile("schedules.yaml")
-			fmt.Println(something)
+		case "10":
+			currentTime := time.Now()
+			headerSchedule, err := readScheduleYamlFile("schedules.yaml")
+			if err != nil {
+				fmt.Printf("Error reading schedule file: %v\n", err)
+				continue
+			}
+			fmt.Println("Enter name of schedule: ")
+			name := readUserInput(reader)
+			// Check if today is Monday
+			loadSchedule(headerSchedule, name, currentTime)
 
+		case "11":
+			fmt.Println("Enter name of schedule: ")
+			name := readUserInput(reader)
+			fmt.Println("Enter days to block seperated by commas: ")
+			days := strings.TrimSpace(readUserInput(reader))
+			var startTimeFormatted string
+			for {
+				fmt.Println("Enter start time: ")
+				startTime := readUserInput(reader)
+				var err error
+				startTimeFormatted, err = FormatTime(startTime)
+				if err != nil {
+					fmt.Println(err)
+					continue
+				} else {
+					break
+				}
+			}
+
+			var endTimeFormatted string
+			var err error
+			for {
+				fmt.Println("Enter end time: ")
+				endTime := readUserInput(reader)
+				endTimeFormatted, err = FormatTime(endTime)
+				if err != nil {
+					fmt.Println(err)
+					continue
+				} else {
+					break
+				}
+			}
+			var cleanedDays []string
+			re := regexp.MustCompile(`\s*,\s*|\s+`)
+			splitDays := re.Split(days, -1)
+			// Split days string into a slice and trim whitespace
+			for _, day := range splitDays {
+				trimmedDay := FormatString(day)               // Trim whitespace
+				cleanedDays = append(cleanedDays, trimmedDay) // Add to cleaned slice
+			}
+
+			writeToScheduleYamlFile("schedules.yaml", name, cleanedDays, startTimeFormatted, endTimeFormatted)
 		default:
 			fmt.Println("Invalid choice. Please try again.")
 		}

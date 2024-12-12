@@ -1,6 +1,8 @@
 package main
 
 import (
+	"errors"
+	"strconv"
 	"strings"
 )
 
@@ -20,4 +22,18 @@ func GetNameFromURL(url string) string {
 		url = strings.TrimSuffix(url, suffix)
 	}
 	return FormatString(url)
+}
+
+func FormatTime(time string) (string, error) {
+	if len(time) > 5 || len(time) < 4 || (len(time) == 5 && time[2] != ':') {
+		return "", errors.New("invalid time format")
+	}
+	if _, err := strconv.Atoi(strings.Replace(time, ":", "", -1)); err != nil {
+		return "", errors.New("invalid time format")
+	}
+	if len(time) == 4 {
+		return (time[:2] + ":" + time[2:]), nil
+	} else {
+		return time, nil
+	}
 }
