@@ -1,0 +1,4 @@
+schedules:
+  - days: [Monday, Tuesday, Wednesday, Thursday, Friday]
+    startTime: 08:00
+    endTime: 17:00

@@ -1,9 +1,5 @@
 sites:
     - name: youtube
       url: www.youtube.com
-      duration: 2024-12-12 11:28:40 +0700
-      currentlyBlocked: false
-    - name: facebook
-      url: www.facebook.com
-      duration: 2024-12-12 11:28:40 +0700
+      duration: 2024-12-12 15:05:24 +0700
       currentlyBlocked: false

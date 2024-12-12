@@ -18,6 +18,11 @@ var (
 	wg                sync.WaitGroup
 )
 
+// Header of yaml file with all sites
+type HeaderSite struct {
+	Sites []Site `yaml:"sites"`
+}
+
 // Site represents a single site to block
 type Site struct {
 	Name             string `yaml:"name"`
@@ -26,13 +31,18 @@ type Site struct {
 	CurrentlyBlocked bool   `yaml:"currentlyBlocked"`
 }
 
-// Header of yaml file with all sites
-type HeaderSite struct {
-	Sites []Site `yaml:"sites"`
+type HeaderSchedule struct {
+	Schedules []Schedule `yaml:"schedules"`
 }
 
-// Function to read yaml file, returns a HeaderSite struct
-func readYamlFile(filename string) (HeaderSite, error) {
+type Schedule struct {
+	Days      []string `yaml:"days"`
+	StartTime string   `yaml:"startTime"`
+	EndTime   string   `yaml:"endTime"`
+}
+
+// Function to read blocked yaml file, returns a HeaderSite struct
+func readBlockedYamlFile(filename string) (HeaderSite, error) {
 	file, err := os.Open(filename)
 	if err != nil {
 		return HeaderSite{}, err
@@ -46,6 +56,22 @@ func readYamlFile(filename string) (HeaderSite, error) {
 		return HeaderSite{}, err
 	}
 	return headerSites, nil
+}
+
+func readScheduleYamlFile(filename string) (HeaderSchedule, error) {
+	file, err := os.Open(filename)
+	if err != nil {
+		return HeaderSchedule{}, err
+	}
+	defer file.Close()
+
+	var headerSchedule HeaderSchedule
+	decoder := yaml.NewDecoder(file)
+	err = decoder.Decode(&headerSchedule)
+	if err != nil {
+		return HeaderSchedule{}, err
+	}
+	return headerSchedule, nil
 }
 
 // Function to add new goroutine when editing or adding to yaml file
@@ -62,6 +88,7 @@ func addNewGoroutine(url string, expiryTime time.Time) {
 			select {
 			case <-ctx.Done(): // Check if context is cancelled through the cancel() function in cleanup
 				fmt.Printf("Goroutine for %s cancelled.\n", url)
+				showMenu()
 				return
 			case <-ticker.C: // Counter to automatically remove site after expiry time
 				if time.Now().After(expiry) {
@@ -75,10 +102,26 @@ func addNewGoroutine(url string, expiryTime time.Time) {
 	}(expiryTime, url, ctx)
 }
 
+func writeAndSave(filename string, data interface{}) error {
+	// Write to original file
+	file, err := os.OpenFile(filename, os.O_RDWR|os.O_TRUNC, 0644)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	encoder := yaml.NewEncoder(file)
+	if err := encoder.Encode(&data); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // Function to write to yaml file
 func writeToYamlFile(filename string, name string, url string, expiryTimeString string, expiryTime time.Time) error {
 	// Read yaml file
-	headerSites, err := readYamlFile(filename)
+	headerSites, err := readBlockedYamlFile(filename)
 	formatted_url := FormatString(url)
 	if err != nil {
 		return err
@@ -101,19 +144,27 @@ func writeToYamlFile(filename string, name string, url string, expiryTimeString 
 	headerSites.Sites = append(headerSites.Sites, newSite)
 
 	// Write to original file
-	file, err := os.OpenFile(filename, os.O_RDWR, 0644)
+	writeAndSave(filename, headerSites)
+
+	// Add new gourotine for new site
+	addNewGoroutine(url, expiryTime)
+	return nil
+}
+
+func writeToScheduleYamlFile(filename string, days []string, startTime string, endTime string) error {
+	headerSchedule, err := readScheduleYamlFile(filename)
 	if err != nil {
 		return err
 	}
-	defer file.Close()
 
-	file.Seek(0, 0)
-	encoder := yaml.NewEncoder(file)
-	if err := encoder.Encode(&headerSites); err != nil {
-		return err
+	newSchedule := Schedule{
+		Days:      days,
+		StartTime: startTime,
+		EndTime:   endTime,
 	}
+	headerSchedule.Schedules = append(headerSchedule.Schedules, newSchedule)
 
-	addNewGoroutine(url, expiryTime)
+	writeAndSave(filename, headerSchedule)
 	return nil
 }
 
@@ -121,7 +172,7 @@ func writeToYamlFile(filename string, name string, url string, expiryTimeString 
 func deleteSiteFromYamlFile(filename string, name, url string) error {
 
 	// Read yaml file
-	headerSites, err := readYamlFile(filename)
+	headerSites, err := readBlockedYamlFile(filename)
 	if err != nil {
 		return err
 	}
@@ -139,28 +190,7 @@ func deleteSiteFromYamlFile(filename string, name, url string) error {
 	headerSites.Sites = updatedSites
 
 	//Write and truncate original file
-	file, err := os.OpenFile(filename, os.O_RDWR, 0644)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	if _, err := file.Seek(0, 0); err != nil {
-		return err
-	}
-
-	encoder := yaml.NewEncoder(file)
-	if err := encoder.Encode(&headerSites); err != nil {
-		return err
-	}
-
-	pos, err := file.Seek(0, 1)
-	if err != nil {
-		return err
-	}
-	if err := file.Truncate(pos); err != nil {
-		return err
-	}
+	writeAndSave(filename, headerSites)
 
 	return nil
 }
@@ -168,7 +198,7 @@ func deleteSiteFromYamlFile(filename string, name, url string) error {
 // Function to update the expiry time for blocked sites
 func updateExpiryTime(filename string, url string, newExpiryTime time.Time, alreadyExists bool) error {
 	newExpiryTimeStr := newExpiryTime.Format("2006-01-02 15:04:05 -0700")
-	sites, err := readYamlFile(filename)
+	sites, err := readBlockedYamlFile(filename)
 	if err != nil {
 		return err
 	}
@@ -193,16 +223,7 @@ func updateExpiryTime(filename string, url string, newExpiryTime time.Time, alre
 	}
 
 	// Writing to original file
-	file, err := os.OpenFile(filename, os.O_RDWR|os.O_TRUNC, 0644)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	encoder := yaml.NewEncoder(file)
-	if err := encoder.Encode(&sites); err != nil {
-		return err
-	}
+	writeAndSave(filename, sites)
 
 	if alreadyExists { // bool to check if the site already exists in config, if it does, we need to update the goroutine. If it does not ie. startup, skip
 		fmt.Printf("Updated expiry time for site: %s to %v", url, newExpiryTimeStr)
@@ -215,7 +236,7 @@ func updateExpiryTime(filename string, url string, newExpiryTime time.Time, alre
 
 // Fcunction to display the status of the blocked sites
 func displayStatus(fileName string) {
-	status, err := readYamlFile(fileName)
+	status, err := readBlockedYamlFile(fileName)
 	if err != nil {
 		return
 	}
@@ -280,7 +301,7 @@ func getDuration(reader *bufio.Reader) time.Duration {
 func blockSites(all bool, yamlFile string, specificSite string) error {
 	var sites []string
 
-	headerSites, err := readYamlFile(yamlFile)
+	headerSites, err := readBlockedYamlFile(yamlFile)
 	if err != nil {
 		return fmt.Errorf("error reading YAML file: %w", err)
 	}
@@ -342,7 +363,7 @@ func updateHostsFile(sites []string) error {
 }
 
 func editblockedStatusOnYamlFile(filename string, url string, status bool) error {
-	headerSites, err := readYamlFile(filename)
+	headerSites, err := readBlockedYamlFile(filename)
 	if err != nil {
 		return err
 	}
@@ -354,16 +375,7 @@ func editblockedStatusOnYamlFile(filename string, url string, status bool) error
 		}
 	}
 
-	file, err := os.OpenFile(filename, os.O_RDWR|os.O_TRUNC, 0644)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	encoder := yaml.NewEncoder(file)
-	if err := encoder.Encode(&headerSites); err != nil {
-		return err
-	}
+	writeAndSave(filename, headerSites)
 
 	return nil
 }
@@ -383,7 +395,7 @@ func cleanup(all bool, url string) error {
 	// Read sites from the specified YAML file
 	var sites []string
 	if all {
-		headerSites, err := readYamlFile("blocked-sites.yaml")
+		headerSites, err := readBlockedYamlFile("blocked-sites.yaml")
 		if err != nil {
 			return err
 		}
@@ -477,7 +489,7 @@ func main() {
 				continue
 			}
 			// Manually activating gourutine for init
-			headerSites, err := readYamlFile(sitesFileLocation)
+			headerSites, err := readBlockedYamlFile(sitesFileLocation)
 			if err != nil {
 				fmt.Printf("Error reading YAML file: %v\n", err)
 				continue
@@ -532,11 +544,14 @@ func main() {
 		case "9": // Delete site from yaml configuration
 			fmt.Print("Enter site to delete from Config: ")
 			site := readUserInput(reader)
+			cleanup(false, site)
 			if err := deleteSiteFromYamlFile("blocked-sites.yaml", "", site); err != nil {
 				fmt.Printf("Error deleting site: %v\n", err)
 			}
 		case "a":
-			fmt.Println(GetNameFromURL("www.youtube.com"))
+			something, _ := readScheduleYamlFile("schedules.yaml")
+			fmt.Println(something)
+
 		default:
 			fmt.Println("Invalid choice. Please try again.")
 		}
