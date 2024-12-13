@@ -36,7 +36,3 @@ sudo./selfcontrol
 ## 🚀 Let's Get Productive!
 
 Take control of your time and focus!
-
-```
-
-```
