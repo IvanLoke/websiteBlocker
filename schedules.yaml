@@ -1,13 +1,8 @@
 schedules:
-    - name: work
-      days:
-        - monday
-        - tuesday
-        - wednesday
-      startTime: "10:00"
-      endTime: "22:00"
-    - name: something
-      days:
-        - monday
-      startTime: "10:00"
-      endTime: "12:00"
+  - name: work
+    days:
+      - monday
+      - tuesday
+      - wednesday
+    startTime: "10:00"
+    endTime: "22:00"
