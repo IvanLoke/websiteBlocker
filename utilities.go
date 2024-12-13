@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
 	"strconv"
@@ -26,6 +27,7 @@ func GetNameFromURL(url string) string {
 	return FormatString(url)
 }
 
+// Function to format time in "HH:MM" format
 func FormatTime(time string) (string, error) {
 	if len(time) > 5 || len(time) < 4 || (len(time) == 5 && time[2] != ':') {
 		return "", errors.New("invalid time format")
@@ -40,6 +42,7 @@ func FormatTime(time string) (string, error) {
 	}
 }
 
+// Function to check if start time is before end time
 func checkStartBeforeEnd(startTime string, endTime string) error {
 	formattedStartTime, errStart := time.Parse("15:04", startTime)
 	formatteedEndTime, errEnd := time.Parse("15:04", endTime)
@@ -57,6 +60,7 @@ func checkStartBeforeEnd(startTime string, endTime string) error {
 	return nil
 }
 
+// Function to check if day is valid
 func checkValidDay(days []string) error {
 	for _, day := range days {
 		valid := false
@@ -71,4 +75,40 @@ func checkValidDay(days []string) error {
 		}
 	}
 	return nil
+}
+
+// Function to repeatedly ask for valid time input
+func queryForTime(reader *bufio.Reader, startTime bool) string {
+	var time string
+	for {
+		if startTime {
+			fmt.Print("Enter start time: ")
+		} else {
+			fmt.Print("Enter end time: ")
+		}
+		rawTime := readUserInput(reader)
+		var err error
+		time, err = FormatTime(rawTime)
+		if err != nil {
+			fmt.Println(err)
+			continue
+		} else {
+			break
+		}
+	}
+	return time
+}
+
+// Function to get duration from user input
+func getDuration(reader *bufio.Reader) time.Duration {
+	for {
+		fmt.Print("Enter duration (e.g. 10s, 30m, 1h, 2h30m): ")
+		input := readUserInput(reader)
+		duration, err := time.ParseDuration(input)
+		if err != nil {
+			fmt.Println("Invalid duration format. Please try again.")
+			continue
+		}
+		return duration
+	}
 }
