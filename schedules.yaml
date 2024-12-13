@@ -4,19 +4,10 @@ schedules:
         - monday
         - tuesday
         - wednesday
-        - thursday
-        - friday
-      startTime: "09:00"
-      endTime: "21:59"
+      startTime: "10:00"
+      endTime: "22:00"
     - name: something
       days:
         - monday
-        - tuesday
-      startTime: "13:00"
-      endTime: "20:00"
-    - name: cool
-      days:
-        - monday
-        - wednesday
-      startTime: "08:00"
-      endTime: "19:00"
+      startTime: "10:00"
+      endTime: "12:00"

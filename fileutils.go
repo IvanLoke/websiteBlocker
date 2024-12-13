@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"fmt"
 	"os"
-	"regexp"
 	"strings"
 	"time"
 
@@ -67,17 +66,21 @@ func editblockedStatusOnYamlFile(filename string, url string, status bool) error
 	if err != nil {
 		return err
 	}
-
+	validURL := false
 	for i := range headerSites.Sites {
 		if headerSites.Sites[i].URL == url {
 			headerSites.Sites[i].CurrentlyBlocked = status
+			validURL = true
 			break
 		}
 	}
 
-	writeAndSave(filename, headerSites)
-
-	return nil
+	if validURL {
+		writeAndSave(filename, headerSites)
+		return nil
+	} else {
+		return fmt.Errorf("URL not found in config file")
+	}
 }
 
 // Function to update the expiry time for blocked sites
@@ -165,13 +168,20 @@ func deleteSiteFromYamlFile(filename string, name, url string) error {
 	// Remove site from yaml file
 	var updatedSites []Site
 	name = strings.TrimSpace(strings.ToLower(name))
+	exists := false
 	for _, site := range headerSites.Sites {
 		if name != "" && site.Name != name {
 			updatedSites = append(updatedSites, site)
 		} else if site.URL != url {
 			updatedSites = append(updatedSites, site)
+		} else {
+			exists = true
 		}
 	}
+	if !exists {
+		return fmt.Errorf("Site not found in config file")
+	}
+
 	headerSites.Sites = updatedSites
 
 	//Write and truncate original file
@@ -201,45 +211,39 @@ func readScheduleYamlFile(filename string) (HeaderSchedule, error) {
 
 func createNewSchedule(reader *bufio.Reader) {
 	fmt.Print("Enter name of schedule: ")
-	name := readUserInput(reader)
+	name := FormatString(readUserInput(reader))
 	fmt.Print("Enter days to block seperated by commas: ")
-	days := strings.TrimSpace(readUserInput(reader))
+	days := FormatString(readUserInput(reader))
 	startTimeFormatted := queryForTime(reader, true)
 	endTimeFormatted := queryForTime(reader, false)
 	if err := checkStartBeforeEnd(startTimeFormatted, endTimeFormatted); err != nil {
 		fmt.Println("Error in time inputs: ", err)
 		return
 	}
-	var cleanedDays []string
-	re := regexp.MustCompile(`\s*,\s*|\s+`)
-	splitDays := re.Split(days, -1)
-
-	// Split days string into a slice and trim whitespace
-	for _, day := range splitDays {
-		trimmedDay := FormatString(day)               // Trim whitespace
-		cleanedDays = append(cleanedDays, trimmedDay) // Add to cleaned slice
-	}
-
-	if err := checkValidDay(cleanedDays); err != nil {
-		fmt.Printf("Error checking valid day: %v\n", err)
+	cleanedDays, err := formatDaysSlice(days)
+	if err != nil {
+		fmt.Println("Error formatting days: ", err)
 		return
 	}
-
-	if err := writeToScheduleYamlFile("schedules.yaml", name, cleanedDays, startTimeFormatted, endTimeFormatted); err != nil {
+	newSchedule, err := writeToScheduleYamlFile("schedules.yaml", name, cleanedDays, startTimeFormatted, endTimeFormatted)
+	if err != nil {
 		fmt.Println("Error writing to schedule yaml file: ", err)
+		return
 	}
+	fmt.Printf("Schedule %s created successfully\n", name)
+	printScheduleInfo(newSchedule)
 }
 
 // Function to create a new schedule and write in to yaml file
-func writeToScheduleYamlFile(filename string, name string, days []string, startTime string, endTime string) error {
+func writeToScheduleYamlFile(filename string, name string, days []string, startTime string, endTime string) (Schedule, error) {
 	headerSchedule, err := readScheduleYamlFile(filename)
 	if err != nil {
-		return err
+		return Schedule{}, err
 	}
 
 	for _, schedule := range headerSchedule.Schedules {
 		if schedule.Name == name {
-			return fmt.Errorf("Schedule already exists")
+			return schedule, fmt.Errorf("Schedule already exists")
 		}
 	}
 
@@ -252,7 +256,7 @@ func writeToScheduleYamlFile(filename string, name string, days []string, startT
 	headerSchedule.Schedules = append(headerSchedule.Schedules, newSchedule)
 
 	writeAndSave(filename, headerSchedule)
-	return nil
+	return newSchedule, nil
 }
 
 // Function to edit schedules on yaml file
@@ -279,13 +283,20 @@ outer:
 		switch option {
 		case "1":
 			if headerSchedule.Schedules[i].Name == name {
+				fmt.Printf("Changed name from %s to %s\n", headerSchedule.Schedules[i].Name, field)
 				headerSchedule.Schedules[i].Name = field
 				validSchedule = true
 				break outer
 			}
 		case "2":
 			if headerSchedule.Schedules[i].Name == name {
-				headerSchedule.Schedules[i].Days = strings.Split(field, ",")
+				newDays, err := formatDaysSlice(field)
+				if err != nil {
+					fmt.Println("Error formatting days: ", err)
+					break outer
+				}
+				fmt.Printf("Changed days from %s to %s\n", strings.Join(headerSchedule.Schedules[i].Days, ", "), newDays)
+				headerSchedule.Schedules[i].Days = newDays
 				validSchedule = true
 				break outer
 			}
@@ -295,6 +306,7 @@ outer:
 					fmt.Println("Error checking start time before end time:", err)
 					break outer
 				}
+				fmt.Printf("Changed start time from %s to %s\n", headerSchedule.Schedules[i].StartTime, field)
 				headerSchedule.Schedules[i].StartTime = field
 				validSchedule = true
 			}
@@ -304,6 +316,7 @@ outer:
 					fmt.Println("Error checking start time before end time:", err)
 					break outer
 				}
+				fmt.Printf("Changed end time from %s to %s\n", headerSchedule.Schedules[i].EndTime, field)
 				headerSchedule.Schedules[i].EndTime = field
 				validSchedule = true
 			}
@@ -314,7 +327,7 @@ outer:
 		writeAndSave(filename, headerSchedule)
 		fmt.Println("Schedule edited successfully")
 	} else {
-		return fmt.Errorf("Schedule not able to be edited")
+		return fmt.Errorf("Schedule %s not found", name)
 	}
 	return nil
 }
@@ -326,16 +339,23 @@ func deleteScheduleFromYamlFile(filename string, name string) error {
 		return err
 	}
 
+	validSchedule := false
 	var updatedSchedules []Schedule
 	for _, schedule := range headerSchedule.Schedules {
 		if schedule.Name != name {
 			updatedSchedules = append(updatedSchedules, schedule)
+		} else {
+			validSchedule = true
 		}
 	}
-	headerSchedule.Schedules = updatedSchedules
-
-	writeAndSave(filename, headerSchedule)
-	return nil
+	if validSchedule {
+		headerSchedule.Schedules = updatedSchedules
+		writeAndSave(filename, headerSchedule)
+		fmt.Printf("Schedule %s deleted successfully", name)
+		return nil
+	} else {
+		return fmt.Errorf("Schedule %s not found in config file", name)
+	}
 }
 
 // Function to write to yaml file

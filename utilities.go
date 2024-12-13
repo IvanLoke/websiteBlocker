@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -13,7 +14,7 @@ var prefixes = [3]string{"www.", "https://", "http://"}
 var suffixes = [2]string{".com", ".org"}
 
 func FormatString(data string) string {
-	return strings.TrimSpace(strings.ToLower(data))
+	return strings.ReplaceAll(strings.TrimSpace(strings.ToLower(data)), " ", "")
 }
 
 // Function to extract name from url
@@ -111,4 +112,29 @@ func getDuration(reader *bufio.Reader) time.Duration {
 		}
 		return duration
 	}
+}
+
+// Function to print schedule info
+func printScheduleInfo(schedule Schedule) {
+	fmt.Printf("Name: %s\n", schedule.Name)
+	fmt.Printf("Days: %s\n", strings.Join(schedule.Days, ", "))
+	fmt.Printf("Start Time: %s\n", schedule.StartTime)
+	fmt.Printf("End Time: %s\n", schedule.EndTime)
+}
+
+func formatDaysSlice(days string) ([]string, error) {
+	var cleanedDays []string
+	re := regexp.MustCompile(`\s*,\s*|\s+`)
+	splitDays := re.Split(days, -1)
+
+	// Split days string into a slice and trim whitespace
+	for _, day := range splitDays {
+		trimmedDay := FormatString(day)               // Trim whitespace
+		cleanedDays = append(cleanedDays, trimmedDay) // Add to cleaned slice
+	}
+
+	if err := checkValidDay(cleanedDays); err != nil {
+		return nil, err
+	}
+	return cleanedDays, nil
 }
