@@ -321,6 +321,7 @@ func main() {
 			}
 			for _, site := range headerSites.Sites {
 				updateExpiryTime(sitesFileLocation, site.URL, expiryTime, false)
+				fmt.Printf("%s blocked until %s\n", site.Name, expiryTime.Format(DateTimeLayout))
 			}
 
 		case "2":
@@ -343,7 +344,7 @@ func main() {
 			}
 			expiryTime := time.Now().Add(parsedDuration)
 			name := GetNameFromURL(site)
-			formattedExpiryTime := expiryTime.Format("2006-01-02 15:04:05 -0700")
+			formattedExpiryTime := expiryTime.Format(DateTimeLayout)
 			fmt.Print("Expiry Time: ", formattedExpiryTime)
 			writeToYamlFile(blockedSitesFilePath, name, site, formattedExpiryTime)
 			blockSites(false, blockedSitesFilePath, site, expiryTime)

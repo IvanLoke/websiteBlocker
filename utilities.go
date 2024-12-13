@@ -83,9 +83,9 @@ func queryForTime(reader *bufio.Reader, startTime bool) string {
 	var time string
 	for {
 		if startTime {
-			fmt.Print("Enter start time: ")
+			fmt.Print("Enter start time in 24H format: ")
 		} else {
-			fmt.Print("Enter end time: ")
+			fmt.Print("Enter end time in 24H format: ")
 		}
 		rawTime := readUserInput(reader)
 		var err error

@@ -1,8 +1,0 @@
-schedules:
-  - name: work
-    days:
-      - monday
-      - tuesday
-      - wednesday
-    startTime: "10:00"
-    endTime: "22:00"

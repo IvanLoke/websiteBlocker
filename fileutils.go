@@ -85,7 +85,7 @@ func editblockedStatusOnYamlFile(filename string, url string, status bool) error
 
 // Function to update the expiry time for blocked sites
 func updateExpiryTime(filename string, url string, newExpiryTime time.Time, alreadyExists bool) error {
-	newExpiryTimeStr := newExpiryTime.Format("2006-01-02 15:04:05 -0700")
+	newExpiryTimeStr := newExpiryTime.Format(DateTimeLayout)
 	sites, err := readBlockedYamlFile(filename)
 	if err != nil {
 		return err
@@ -225,7 +225,7 @@ func createNewSchedule(reader *bufio.Reader) {
 		fmt.Println("Error formatting days: ", err)
 		return
 	}
-	newSchedule, err := writeToScheduleYamlFile("schedules.yaml", name, cleanedDays, startTimeFormatted, endTimeFormatted)
+	newSchedule, err := writeToScheduleYamlFile(schedulesFilePath, name, cleanedDays, startTimeFormatted, endTimeFormatted)
 	if err != nil {
 		fmt.Println("Error writing to schedule yaml file: ", err)
 		return
