@@ -2,8 +2,10 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"strconv"
 	"strings"
+	"time"
 )
 
 var prefixes = [3]string{"www.", "https://", "http://"}
@@ -36,4 +38,37 @@ func FormatTime(time string) (string, error) {
 	} else {
 		return time, nil
 	}
+}
+
+func checkStartBeforeEnd(startTime string, endTime string) error {
+	formattedStartTime, errStart := time.Parse("15:04", startTime)
+	formatteedEndTime, errEnd := time.Parse("15:04", endTime)
+	if errStart != nil {
+		fmt.Println("Error parsing start time: ", errStart)
+		return errStart
+	}
+	if errEnd != nil {
+		fmt.Println("Error parsing end time: ", errEnd)
+		return errEnd
+	}
+	if formatteedEndTime.Before(formattedStartTime) {
+		return errors.New("end time cannot be before start time")
+	}
+	return nil
+}
+
+func checkValidDay(days []string) error {
+	for _, day := range days {
+		valid := false
+		for _, validDay := range daysOfWeek {
+			if strings.EqualFold(day, validDay) {
+				valid = true
+				break
+			}
+		}
+		if !valid {
+			return fmt.Errorf("invalid day entered: %s", day)
+		}
+	}
+	return nil
 }

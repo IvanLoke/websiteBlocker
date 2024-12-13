@@ -1,16 +1,22 @@
 schedules:
-  - name: work
-    days:
-      - monday
-      - tuesday
-      - wednesday
-      - thursday
-      - friday
-    startTime: "12:00"
-    endTime: "17:00"
-  - name: something
-    days:
-      - monday
-      - tuesday
-    startTime: "13:00"
-    endTime: "18:00"
+    - name: work
+      days:
+        - monday
+        - tuesday
+        - wednesday
+        - thursday
+        - friday
+      startTime: "13:00"
+      endTime: "14:00"
+    - name: something
+      days:
+        - monday
+        - tuesday
+      startTime: "13:00"
+      endTime: "20:00"
+    - name: cool
+      days:
+        - monday
+        - wednesday
+      startTime: "08:00"
+      endTime: "19:00"
