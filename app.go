@@ -5,8 +5,10 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/signal"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -293,6 +295,21 @@ func removeGouroutine(url string) {
 }
 
 func main() {
+	// Set up signal handling for graceful shutdown
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+
+	// Start a goroutine to handle the signal
+	go func() {
+		sig := <-sigChan
+		fmt.Printf("\nReceived signal: %v\n", sig)
+		// Clean up all blocked sites
+		if err := cleanup(true, ""); err != nil {
+			fmt.Printf("Error during cleanup: %v\n", err)
+		}
+		os.Exit(0)
+	}()
+
 	reader := bufio.NewReader(os.Stdin)
 
 	// Verify password before allowing access
@@ -338,9 +355,9 @@ func main() {
 			fmt.Println("Chosen to show current status")
 			displayStatus(blockedSitesFilePath)
 
-		// case "q": // Unblock all sites
-		// 	fmt.Println("Unblocked all sites")
-		// 	cleanup(true, "")
+		case "q": // Unblock all sites
+			fmt.Println("Unblocked all sites")
+			cleanup(true, "")
 
 		case "3": // Add new site to block
 			fmt.Print("Enter site URL: ")
