@@ -25,7 +25,7 @@ Execute the tool with administrative privileges to apply the website blocks.
 
 ```
 go build -o selfcontrol
-sudo./selfcontrol
+sudo ./selfcontrol
 ```
 
 ## ⚠️ Disclaimer

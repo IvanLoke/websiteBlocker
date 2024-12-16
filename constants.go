@@ -6,6 +6,7 @@ const (
 	hostsFile            = "/etc/hosts"
 	blockedSitesFilePath = "configs/blocked-sites.yaml"
 	schedulesFilePath    = "configs/schedules.yaml"
+	passwordFilePath     = "configs/.password"
 )
 
 var daysOfWeek = []string{"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"}

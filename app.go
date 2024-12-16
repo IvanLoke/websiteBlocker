@@ -61,7 +61,7 @@ func addNewGoroutine(url string, expiryTime time.Time) {
 			case <-ticker.C: // Counter to automatically remove site after expiry time
 				if time.Now().After(expiry) {
 					cleanup(false, url) // Replace with actual cleanup logic
-					fmt.Printf("Cleaned up 1%s\n", url)
+					fmt.Printf("Unblocked %s\n", url)
 					showMenu()
 					return
 				}
@@ -116,21 +116,23 @@ func showSchedules(filepath string) {
 }
 
 func showMenu() {
-	fmt.Println("\n\n====== SelfControl Menu ======")
-	fmt.Println("1. Block all sites in config")
+	time.Sleep(200 * time.Millisecond)
+	fmt.Println("\n\n ****Self Control Menu****")
+	fmt.Println("1. Block all sites")
 	fmt.Println("2. Show current status")
 	fmt.Println("3. Unblock all sites")
 	fmt.Println("4. Add new site to block")
 	fmt.Println("5. Unblock specific site")
-	fmt.Println("6. Change expiry time for blocked sites")
-	fmt.Println("7. Delete site from yaml configuration")
+	fmt.Println("6. Edit blocked site duration")
+	fmt.Println("7. Delete site from Config")
 	fmt.Println("8. Show schedules")
 	fmt.Println("9. Load schedule")
-	fmt.Println("10. Add new schedule")
+	fmt.Println("10. Create new Schedule")
 	fmt.Println("11. Delete schedule")
 	fmt.Println("12. Edit schedule")
-	fmt.Println("13. Exit")
-	fmt.Print("\nEnter your choice (1-13): ")
+	fmt.Println("13. Change password")
+	fmt.Println("14. Exit")
+	fmt.Print("\nChoose an option: ")
 }
 
 // Function to read user input
@@ -291,8 +293,16 @@ func removeGouroutine(url string) {
 }
 
 func main() {
-
 	reader := bufio.NewReader(os.Stdin)
+
+	// Verify password before allowing access
+	for {
+		if !verifyPassword(reader) {
+			fmt.Println("Access denied")
+		} else {
+			break
+		}
+	}
 
 	for {
 		wg.Wait()
@@ -403,11 +413,20 @@ func main() {
 				continue
 			}
 
-		case "13": // Exit
+		case "13": // Change password
+			if err := changePassword(reader); err != nil {
+				fmt.Printf("Error changing password: %v\n", err)
+			} else {
+				fmt.Println("Password changed successfully")
+			}
+
+		case "14": // Exit
 			fmt.Println("Goodbye!")
 			cleanup(true, "")
 			wg.Wait()
 			return
+		default:
+			fmt.Println("Invalid option")
 		}
 	}
 }
