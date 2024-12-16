@@ -120,18 +120,18 @@ func showMenu() {
 	fmt.Println("\n\n ****Self Control Menu****")
 	fmt.Println("1. Block all sites")
 	fmt.Println("2. Show current status")
-	fmt.Println("3. Unblock all sites")
-	fmt.Println("4. Add new site to block")
-	fmt.Println("5. Unblock specific site")
-	fmt.Println("6. Edit blocked site duration")
-	fmt.Println("7. Delete site from Config")
-	fmt.Println("8. Show schedules")
-	fmt.Println("9. Load schedule")
-	fmt.Println("10. Create new Schedule")
-	fmt.Println("11. Delete schedule")
-	fmt.Println("12. Edit schedule")
-	fmt.Println("13. Change password")
-	fmt.Println("14. Exit")
+	// fmt.Println("3. Unblock all sites")
+	fmt.Println("3. Add new site to block")
+	// fmt.Println("5. Unblock specific site")
+	fmt.Println("4. Edit blocked site duration")
+	fmt.Println("5. Delete site from Config")
+	fmt.Println("6. Show schedules")
+	fmt.Println("7. Load schedule")
+	fmt.Println("8. Create new Schedule")
+	fmt.Println("9. Delete schedule")
+	fmt.Println("10. Edit schedule")
+	fmt.Println("11. Change password")
+	fmt.Println("12. Exit")
 	fmt.Print("\nChoose an option: ")
 }
 
@@ -338,11 +338,11 @@ func main() {
 			fmt.Println("Chosen to show current status")
 			displayStatus(blockedSitesFilePath)
 
-		case "3": // Unblock all sites
-			fmt.Println("Unblocked all sites")
-			cleanup(true, "")
+		// case "q": // Unblock all sites
+		// 	fmt.Println("Unblocked all sites")
+		// 	cleanup(true, "")
 
-		case "4": // Add new site to block
+		case "3": // Add new site to block
 			fmt.Print("Enter site URL: ")
 			site := FormatString(readUserInput(reader))
 			fmt.Print("Enter blocking duration: ")
@@ -359,16 +359,16 @@ func main() {
 			writeToYamlFile(blockedSitesFilePath, name, site, formattedExpiryTime)
 			blockSites(false, blockedSitesFilePath, site, expiryTime)
 
-		case "5": // Unblock specific site
-			fmt.Print("Enter site to unblock: ")
-			site := FormatString(readUserInput(reader))
-			if err := cleanup(false, site); err != nil {
-				fmt.Printf("Error unblocking site: %v\n", err)
-				continue
-			}
-			fmt.Println("Unblocked site: ", site)
+		// case "5": // Unblock specific site
+		// 	fmt.Print("Enter site to unblock: ")
+		// 	site := FormatString(readUserInput(reader))
+		// 	if err := cleanup(false, site); err != nil {
+		// 		fmt.Printf("Error unblocking site: %v\n", err)
+		// 		continue
+		// 	}
+		// 	fmt.Println("Unblocked site: ", site)
 
-		case "6": // Edit blocked site duration
+		case "4": // Edit blocked site duration
 			fmt.Print("Enter which site to change expiry time: ")
 			site := FormatString(readUserInput(reader))
 			fmt.Print("Enter new expiry time: ")
@@ -377,16 +377,16 @@ func main() {
 				fmt.Printf("Error updating expiry time: %v\n", err)
 			}
 
-		case "7": // Delete site from yaml configuration
+		case "5": // Delete site from yaml configuration
 			fmt.Print("Enter site to delete from Config: ")
 			site := FormatString(readUserInput(reader))
 			cleanup(false, site)
 			if err := deleteSiteFromYamlFile(blockedSitesFilePath, "", site); err != nil {
 				fmt.Printf("Error deleting site: %v\n", err)
 			}
-		case "8": // Show schedules
+		case "6": // Show schedules
 			showSchedules(schedulesFilePath)
-		case "9": // Load schedule
+		case "7": // Load schedule
 			currentTime := time.Now()
 			headerSchedule, err := readScheduleYamlFile(schedulesFilePath)
 			if err != nil {
@@ -397,30 +397,30 @@ func main() {
 			name := FormatString(readUserInput(reader))
 			loadSchedule(headerSchedule, name, currentTime)
 
-		case "10": // Create new Schedule
+		case "8": // Create new Schedule
 			createNewSchedule(reader)
 
-		case "11": // Delete schedule
+		case "9": // Delete schedule
 			fmt.Print("Enter name of schedule to delete: ")
 			name := FormatString(readUserInput(reader))
 			if err := deleteScheduleFromYamlFile(schedulesFilePath, name); err != nil {
 				fmt.Printf("Error deleting schedule: %v\n", err)
 			}
 
-		case "12": // Edit schedule
+		case "10": // Edit schedule
 			if err := editSchedulesonYamlFile(schedulesFilePath, reader); err != nil {
 				fmt.Printf("Error editing schedule: %v\n", err)
 				continue
 			}
 
-		case "13": // Change password
+		case "11": // Change password
 			if err := changePassword(reader); err != nil {
 				fmt.Printf("Error changing password: %v\n", err)
 			} else {
 				fmt.Println("Password changed successfully")
 			}
 
-		case "14": // Exit
+		case "12": // Exit
 			fmt.Println("Goodbye!")
 			cleanup(true, "")
 			wg.Wait()
