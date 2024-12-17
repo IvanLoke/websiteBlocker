@@ -106,10 +106,7 @@ func showMenu() {
 	fmt.Println("9. Delete schedule")
 	fmt.Println("10. Edit schedule")
 	fmt.Println("11. Change password")
-	fmt.Println("12. Unblock all sites")
-	fmt.Println("13. Unblock specific site")
-	fmt.Println("14. Exit")
-	fmt.Println("15. Start in background")
+	fmt.Println("12. Exit")
 	fmt.Print("\nChoose an option: ")
 }
 
@@ -424,9 +421,7 @@ func main() {
 		sig := <-sigChan
 		fmt.Printf("\nReceived signal: %v\n", sig)
 		// Clean up all blocked sites
-		if err := cleanup(true, ""); err != nil {
-			fmt.Printf("Error during cleanup: %v\n", err)
-		}
+		startBackground()
 		os.Exit(0)
 	}()
 
@@ -543,25 +538,13 @@ func main() {
 			} else {
 				fmt.Println("Password changed successfully")
 			}
-		case "12": // Unblock all sites
-			fmt.Println("Unblocked all sites")
-			cleanup(true, "")
-		case "13": // Unblock specific site
-			fmt.Print("Enter site to unblock: ")
-			site := FormatString(readUserInput(reader))
-			if err := cleanup(false, site); err != nil {
-				fmt.Printf("Error unblocking site: %v\n", err)
-				continue
-			}
-			fmt.Println("Unblocked site: ", site)
-		case "14": // Exit Gracefully
-			fmt.Println("Goodbye!")
-			cleanup(true, "")
-			wgRemove.Wait()
-			return
-		case "15": // Start process in background
+		case "12": // Start process in background
 			startBackground()
 			return
+		// case "15": // Exit Gracefully
+		// 	cleanup(true, "")
+		// 	wgRemove.Wait()
+		// 	return
 		default:
 			fmt.Println("Invalid option")
 		}
