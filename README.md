@@ -3,13 +3,13 @@
 Stay focused and eliminate distractions with this simple tool. Block websites that hinder your productivity and create a disciplined digital environment.
 
 
-## Features ✨
+## ✨ Features
 
-- **Site Access Scheduling 📅**
-- **Encrypted Password Login 🔒**
-- **Autonomous and Granular Site Blocking 🛑**
-- **Persistent Blocking After Restarts ♻️**
-- **Run Seamlessly in the Background 🚀**
+-  Site Access Scheduling 📅
+-  Encrypted Password Login 🔒
+-  Autonomous and Granular Site Blocking 🛑
+-  Persistent Blocking Even After Restarts ♻️
+-  Runs Seamlessly in the Background 🚀
 
 
 ## 🚨 Prerequisites
