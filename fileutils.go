@@ -116,13 +116,16 @@ func updateExpiryTime(filename string, url string, newExpiryTime time.Time, alre
 	if alreadyExists { // bool to check if the site already exists in config, if it does, we need to update the goroutine. If it does not ie. startup, skip
 		fmt.Printf("Updated expiry time for site: %s to %v", url, newExpiryTimeStr)
 		cleanup(false, url)
-		blockSites(false, filename, url, newExpiryTime)
+		blockSites(false, filename, url, newExpiryTime, false)
 	}
 	return nil
 }
 
 // Function to update the hosts file
 func updateHostsFile(sites []string) error {
+	hostsMu.Lock()         // Lock the mutex
+	defer hostsMu.Unlock() // Ensure it gets unlocked at the end
+
 	// Read the current contents of the hosts file
 	content, err := os.ReadFile("/etc/hosts")
 	if err != nil {

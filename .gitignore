@@ -2,4 +2,5 @@
 configs/.password
 configs/*.password
 
+nohup.out
 
