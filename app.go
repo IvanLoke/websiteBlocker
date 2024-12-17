@@ -54,7 +54,7 @@ func displayStatus(fileName string) {
 		return
 	}
 	empty := true
-	fmt.Println("***Blocked sites***")
+	fmt.Println("\n***Blocked sites***")
 	for _, site := range status.Sites {
 		parsedTime, err := time.Parse(DateTimeLayout, site.Duration)
 		if err != nil {
@@ -97,9 +97,7 @@ func showMenu() {
 	fmt.Println("\n\n ****Self Control Menu****")
 	fmt.Println("1. Block all sites")
 	fmt.Println("2. Show current status")
-	// fmt.Println("3. Unblock all sites")
 	fmt.Println("3. Add new site to block")
-	// fmt.Println("5. Unblock specific site")
 	fmt.Println("4. Edit blocked site duration")
 	fmt.Println("5. Delete site from Config")
 	fmt.Println("6. Show schedules")
@@ -108,9 +106,10 @@ func showMenu() {
 	fmt.Println("9. Delete schedule")
 	fmt.Println("10. Edit schedule")
 	fmt.Println("11. Change password")
-	fmt.Println("12. Exit")
-	fmt.Println("13. Test goroutine")
-	fmt.Println("14. Start special background process")
+	fmt.Println("12. Unblock all sites")
+	fmt.Println("13. Unblock specific site")
+	fmt.Println("14. Exit")
+	fmt.Println("15. Start in background")
 	fmt.Print("\nChoose an option: ")
 }
 
@@ -472,13 +471,9 @@ func main() {
 				continue
 			}
 
-		case "2":
+		case "2": // Show current blocked sites
 			fmt.Println("Chosen to show current status")
 			displayStatus(blockedSitesFilePath)
-
-		case "q": // Unblock all sites
-			fmt.Println("Unblocked all sites")
-			cleanup(true, "")
 
 		case "3": // Add new site to block
 			fmt.Print("Enter site URL: ")
@@ -496,15 +491,6 @@ func main() {
 			fmt.Print("Expiry Time: ", formattedExpiryTime)
 			writeToYamlFile(blockedSitesFilePath, name, site, formattedExpiryTime)
 			blockSites(false, blockedSitesFilePath, site, expiryTime, false)
-
-		// case "5": // Unblock specific site
-		// 	fmt.Print("Enter site to unblock: ")
-		// 	site := FormatString(readUserInput(reader))
-		// 	if err := cleanup(false, site); err != nil {
-		// 		fmt.Printf("Error unblocking site: %v\n", err)
-		// 		continue
-		// 	}
-		// 	fmt.Println("Unblocked site: ", site)
 
 		case "4": // Edit blocked site duration
 			fmt.Print("Enter which site to change expiry time: ")
@@ -557,13 +543,23 @@ func main() {
 			} else {
 				fmt.Println("Password changed successfully")
 			}
-
-		case "12": // Exit
+		case "12": // Unblock all sites
+			fmt.Println("Unblocked all sites")
+			cleanup(true, "")
+		case "13": // Unblock specific site
+			fmt.Print("Enter site to unblock: ")
+			site := FormatString(readUserInput(reader))
+			if err := cleanup(false, site); err != nil {
+				fmt.Printf("Error unblocking site: %v\n", err)
+				continue
+			}
+			fmt.Println("Unblocked site: ", site)
+		case "14": // Exit Gracefully
 			fmt.Println("Goodbye!")
 			cleanup(true, "")
 			wgRemove.Wait()
 			return
-		case "14":
+		case "15": // Start process in background
 			startBackground()
 			return
 		default:
