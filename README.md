@@ -23,7 +23,7 @@ Before you begin:
 - Information for blocked sites and schedules are stored in yaml in configs folder
 - The tool modifies the `/etc/hosts` file to block specified websites based on the yaml configs
 - Websites are redirected to `localhost`, preventing them from loading via the local DNS server.
-- Background runtime writes to nohup.out for debugging 
+- Background runtime writes to `nohup.out` for debugging 
 
 ## 📖 Instructions
 
