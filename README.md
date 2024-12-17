@@ -20,7 +20,8 @@ Before you begin:
 
 ## 🛠️ How It Works
 
-- The tool modifies the `/etc/hosts` file to block specified websites.
+- Information for blocked sites and schedules are stored in yaml in configs folder
+- The tool modifies the `/etc/hosts` file to block specified websites based on the yaml configs
 - Websites are redirected to `localhost`, preventing them from loading via the local DNS server.
 
 ## 📖 Instructions
@@ -90,6 +91,7 @@ sudo ./selfcontrol
 ## ⚠️ Disclaimer
 
 - Editing the `/etc/hosts` file requires **administrative privileges**.
+- Do not tamper with yaml configs directly. Instead use the CLI menu to interact with configs
 - Use this tool responsibly and proceed with caution.
 
 ## 🚀 Let's Get Productive!
