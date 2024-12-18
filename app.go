@@ -445,6 +445,7 @@ func main() {
 
 	for {
 		wgRemove.Wait()
+		time.Sleep(200 * time.Millisecond)
 		showMenu()
 		choice := readUserInput(reader)
 		switch choice {
