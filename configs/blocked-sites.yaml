@@ -1,13 +1,13 @@
 sites:
     - name: facebook
       url: www.facebook.com
-      duration: 2024-12-18 09:54:11 +0700
+      duration: 2024-12-18 10:16:15 +0700
       currentlyBlocked: false
     - name: youtube
       url: www.youtube.com
-      duration: 2024-12-18 09:54:11 +0700
+      duration: 2024-12-18 10:16:15 +0700
       currentlyBlocked: false
     - name: instagram
       url: www.instagram.com
-      duration: 2024-12-18 09:54:11 +0700
+      duration: 2024-12-18 10:16:15 +0700
       currentlyBlocked: false
