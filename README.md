@@ -100,6 +100,18 @@ sudo ./selfcontrol
 - Do not tamper with yaml configs directly. Instead use the CLI menu to interact with configs
 - Use this tool responsibly and proceed with caution.
 
+## Results
+- Currently working page
+![alt message](screenshots/workingPage.PNG)
+
+- Starting selfcontrol application and blocking sites  
+![alt message](screenshots/blockedsites.PNG)
+
+- Sites are blocked and cannot be reached through browser
+![alt message](screenshots/finalblockedsite.PNG)
+
+- Sites are unblocked at the end of the duration  
+![alt message](screenshots/unblockedsites.PNG)
 ## 🚀 Let's Get Productive!
 
 Take control of your time and focus!
