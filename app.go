@@ -169,7 +169,7 @@ func cleanup(all bool, url string) error {
 	// Read sites from the specified YAML file
 	var sites []string
 	if all {
-		headerSites, err := readBlockedYamlFile(blockedSitesFilePath)
+		headerSites, err := readBlockedYamlFile(absolutePathToSelfControl + "/configs/blocked-sites.yaml")
 		if err != nil {
 			return err
 		}
@@ -177,7 +177,7 @@ func cleanup(all bool, url string) error {
 		// Prepare hosts file entries
 		for _, site := range headerSites.Sites {
 			sites = append(sites, site.URL)
-			editblockedStatusOnYamlFile(blockedSitesFilePath, site.URL, false)
+			editblockedStatusOnYamlFile(absolutePathToSelfControl+"/configs/blocked-sites.yaml", site.URL, false)
 			removeGouroutine(site.URL)
 		}
 	} else {
