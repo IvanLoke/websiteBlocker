@@ -1,0 +1,6 @@
+# Password and config files
+configs/.password
+configs/*.password
+
+nohup.out
+
