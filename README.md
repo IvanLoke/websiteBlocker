@@ -4,11 +4,11 @@ Stay focused and eliminate distractions with this simple tool. Block websites th
 
 ## ✨ Features
 
-- Site Access Scheduling 📅
-- Encrypted Password Login 🔒
-- Autonomous and Granular Site Blocking 🛑
-- Persistent Blocking Even After Restarts ♻️
-- Runs Seamlessly in the Background 🚀
+- 📅 Site Access Scheduling 
+- 🔒 Encrypted Password Login 
+- 🛑 Autonomous and Granular Site Blocking
+- ♻️ Persistent Blocking Even After Restarts
+- 🚀 Runs Seamlessly in the Background
 
 ## 🚨 Prerequisites
 
@@ -18,10 +18,10 @@ Before you begin:
 
 ## 🛠️ How It Works
 
-- Information for blocked sites and schedules are stored in yaml in configs folder
-- The tool modifies the `/etc/hosts` file to block specified websites based on the yaml configs
-- Websites are redirected to `localhost`, preventing them from loading via the local DNS server.
-- Background runtime writes to `nohup.out` for debugging
+- Stores blocked sites and schedules in YAML files located in the `configs` folder.
+- Modifies the `/etc/hosts file` to block specified websites based on the YAML configs.
+- Redirects websites to `localhost`, preventing them from loading via the local DNS server.
+- Background runtime writes to `nohup.out` for debugging.
 
 ## 📖 Instructions
 
@@ -31,7 +31,7 @@ Save a copy of the file to ensure you can revert changes if needed.
 
 ### 2. Create service file in etc/systemd/system (optional)
 
-To have persistence blocking on startup, create service file in **etc/systemd/system**
+To have persistence blocking on startup, create a service file in **etc/systemd/system**
 
 - Create service file
 
@@ -39,7 +39,7 @@ To have persistence blocking on startup, create service file in **etc/systemd/sy
 sudo nano /etc/systemd/system/selfcontrol.service
 ```
 
-- Add configurations to file
+- Add the following configurations to the file:
 
 ```
 [Unit]
