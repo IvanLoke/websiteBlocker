@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 
 	"golang.org/x/crypto/bcrypt"
@@ -13,20 +14,57 @@ func getPasswordFilePath() string {
 	return passwordFilePath
 }
 
+// Function to hash password
 func hashPassword(password string) (string, error) {
 	bytes, err := bcrypt.GenerateFromPassword([]byte(password), 14)
 	return string(bytes), err
 }
 
+// Function to verify if password matches stored value
 func checkPassword(password, hash string) bool {
 	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
 	return err == nil
 }
 
+// ValidatePassword checks if the password meets the security requirements
+func ValidatePassword(password string) error {
+	if len(password) < 8 {
+		return fmt.Errorf("password must be at least 8 characters long")
+	}
+
+	// Check for at least one uppercase letter
+	if matched, _ := regexp.MatchString("[A-Z]", password); !matched {
+		return fmt.Errorf("password must contain at least one uppercase letter")
+	}
+
+	// Check for at least one lowercase letter
+	if matched, _ := regexp.MatchString("[a-z]", password); !matched {
+		return fmt.Errorf("password must contain at least one lowercase letter")
+	}
+
+	// Check for at least one digit
+	if matched, _ := regexp.MatchString("[0-9]", password); !matched {
+		return fmt.Errorf("password must contain at least one digit")
+	}
+
+	// Check for at least one special character
+	if matched, _ := regexp.MatchString("[!@#$%^&*(),.?\":{}|<>]", password); !matched {
+		return fmt.Errorf("password must contain at least one special character")
+	}
+
+	return nil
+}
+
+// Function to create password
 func createPassword(reader *bufio.Reader) error {
 	fmt.Print("Create new password: ")
 	password, _ := reader.ReadString('\n')
 	password = strings.TrimSpace(password)
+
+	// Validate the new password
+	if err := ValidatePassword(password); err != nil {
+		return fmt.Errorf("password validation failed: %v", err)
+	}
 
 	fmt.Print("Confirm password: ")
 	confirm, _ := reader.ReadString('\n')
@@ -50,6 +88,7 @@ func createPassword(reader *bufio.Reader) error {
 	return nil
 }
 
+// Function to get password from user and verify it
 func verifyPassword(reader *bufio.Reader) bool {
 	// Read stored password hash
 	hashedBytes, err := os.ReadFile(getPasswordFilePath())
@@ -76,6 +115,7 @@ func verifyPassword(reader *bufio.Reader) bool {
 	return true
 }
 
+// Function to change password and rewrite to file
 func changePassword(reader *bufio.Reader) error {
 	// Verify current password first
 	if !verifyPassword(reader) {
