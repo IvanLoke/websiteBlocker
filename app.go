@@ -365,6 +365,14 @@ func checkAndCleanupExistingInstance() error {
 			return fmt.Errorf("error reading lock file: %v", err)
 		}
 
+		if len(pidData) == 0 {
+			// Lock file is empty, remove it
+			if err := os.Remove(lockFilePath); err != nil {
+				return fmt.Errorf("error removing empty lock file: %v", err)
+			}
+			return nil
+		}
+
 		var pid int
 		if _, err := fmt.Sscanf(string(pidData), "%d", &pid); err != nil {
 			return fmt.Errorf("error parsing PID from lock file: %v", err)
@@ -613,5 +621,5 @@ func startBackground() {
 		fmt.Printf("Error creating lock file: %v\n", err)
 		return
 	}
-	fmt.Println("Special process started in background")
+	fmt.Println("Selfcontrol application started in background")
 }
