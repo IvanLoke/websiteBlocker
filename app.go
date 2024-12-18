@@ -596,5 +596,5 @@ func startBackground() {
 		fmt.Printf("Error creating lock file: %v\n", err)
 		return
 	}
-	fmt.Println("Special process started in background")
+	fmt.Println("Selfcontrol started in background")
 }
