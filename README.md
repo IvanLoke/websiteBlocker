@@ -29,9 +29,34 @@ Before you begin:
 
 Save a copy of the file to ensure you can revert changes if needed.
 
-### 2. Create service file in etc/systemd/system (optional)
+### 2. Initialise the Application
 
-To have persistence blocking on startup, create a service file in **etc/systemd/system**
+Execute the tool with administrative privileges to apply the website blocks.
+
+```
+go build -o selfcontrol
+sudo ./selfcontrol
+```
+
+### 3. Rerun application after initialization
+
+After application creates service file and updates the absolute path to executable, exit the application and run the following code to restart the application again.
+
+```
+go build -o selfcontrol
+sudo ./selfcontrol
+```
+
+## ⚠️ Disclaimer
+
+- Editing the `/etc/hosts` file requires **administrative privileges**.
+- Do not tamper with yaml configs directly. Instead use the CLI menu to interact with configs
+- Use this tool responsibly and proceed with caution.
+
+
+## Service details
+This is the code ran to create service file created by the application
+
 
 - Create service file
 
@@ -85,24 +110,20 @@ sudo systemctl restart selfcontrol.service
 sudo systemctl status selfcontrol.service
 ```
 
-### 3. Change path in `constants.go`
-
-Edit `absolutePathToSelfControl` variable in `constants.go` to your root path to selfcontrol binary
-
-### 4. Run the Application
-
-Execute the tool with administrative privileges to apply the website blocks.
+## If necessary, run the 4 lines of code below to remove completely remove service
 
 ```
-go build -o selfcontrol
-sudo ./selfcontrol
+sudo systemctl stop selfcontrol.service
 ```
-
-## ⚠️ Disclaimer
-
-- Editing the `/etc/hosts` file requires **administrative privileges**.
-- Do not tamper with yaml configs directly. Instead use the CLI menu to interact with configs
-- Use this tool responsibly and proceed with caution.
+```
+sudo systemctl disable selfcontrol.service
+```
+```
+sudo rm /etc/systemd/system/selfcontrol.service
+```
+```
+sudo systemctl daemon-reload
+```
 
 ## Results
 - Currently working page
