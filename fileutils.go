@@ -110,7 +110,7 @@ func updateExpiryTime(filename string, url string, newExpiryTime time.Time, alre
 		return nil
 	}
 
-	// Writing to original file
+	// Writing to blocked file
 	writeAndSave(filename, sites)
 
 	if alreadyExists { // bool to check if the site already exists in config, if it does, we need to update the goroutine. If it does not ie. startup, skip
