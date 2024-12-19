@@ -85,7 +85,11 @@ sudo systemctl restart selfcontrol.service
 sudo systemctl status selfcontrol.service
 ```
 
-### 3. Run the Application
+### 3. Change path in `constants.go`
+
+Edit `absolutePathToSelfControl` variable in `constants.go` to your root path to selfcontrol binary
+
+### 4. Run the Application
 
 Execute the tool with administrative privileges to apply the website blocks.
 
