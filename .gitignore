@@ -4,3 +4,5 @@ configs/*.password
 
 nohup.out
 
+# Ignore the compiled binary
+selfcontrol
