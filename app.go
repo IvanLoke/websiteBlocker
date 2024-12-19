@@ -454,7 +454,14 @@ func main() {
 	// Check if service is enabled
 	if !checkForServiceFile() {
 		fmt.Println("Creating service file")
-		createServiceFile()
+		err := createServiceFile()
+		if err != nil {
+			fmt.Println("Error creating service file")
+			return
+		}
+		fmt.Println("Service file created")
+		fmt.Println("Updating file path in constants.go")
+		initAbsPathToSelfControl()
 	}
 
 	// Main menu loop
@@ -564,20 +571,6 @@ func main() {
 		case "12": // Start process in background
 			startBackground()
 			return
-		case "q":
-			exePath, err := os.Executable()
-			if err != nil {
-				fmt.Printf("Error getting executable path: %v\n", err)
-				return
-			}
-
-			// Optionally, get the directory of the executable
-			exeDir := filepath.Dir(exePath)
-
-			fmt.Printf("Executable Path: %s\n", exePath)
-			fmt.Printf("Executable Directory: %s\n", exeDir)
-		case "w":
-			initAbsPathToSelfControl()
 		// case "15": // Exit Gracefully
 		// 	cleanup(true, "")
 		// 	wgRemove.Wait()
