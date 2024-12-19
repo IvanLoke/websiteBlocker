@@ -451,6 +451,13 @@ func main() {
 		}
 	}
 
+	if !checkForServiceFile() {
+		fmt.Println("Creating service file")
+		createServiceFile()
+	}
+	// Check if service is enabled
+
+	// Main menu loop
 	for {
 		wgRemove.Wait()
 		time.Sleep(200 * time.Millisecond)
@@ -569,6 +576,10 @@ func main() {
 
 			fmt.Printf("Executable Path: %s\n", exePath)
 			fmt.Printf("Executable Directory: %s\n", exeDir)
+		case "w":
+			if !checkForServiceFile() {
+				createServiceFile()
+			}
 		// case "15": // Exit Gracefully
 		// 	cleanup(true, "")
 		// 	wgRemove.Wait()
@@ -577,6 +588,21 @@ func main() {
 			fmt.Println("Invalid option")
 		}
 	}
+}
+
+func getDirectoryPaths() (executablePath string, executableDirectory string) {
+	exePath, err := os.Executable()
+	if err != nil {
+		fmt.Printf("Error getting executable path: %v\n", err)
+		return
+	}
+
+	// Optionally, get the directory of the executable
+	exeDir := filepath.Dir(exePath)
+
+	fmt.Printf("Executable Path: %s\n", exePath)
+	fmt.Printf("Executable Directory: %s\n", exeDir)
+	return exePath, exeDir
 }
 
 // Function to start the application in the background while in main function

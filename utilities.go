@@ -4,6 +4,9 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"log"
+	"os"
+	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
@@ -137,4 +140,63 @@ func formatDaysSlice(days string) ([]string, error) {
 		return nil, err
 	}
 	return cleanedDays, nil
+}
+
+func checkForServiceFile() bool {
+	_, err := os.Stat("/etc/systemd/system/selfcontrol.service")
+	if err != nil {
+		if os.IsNotExist(err) {
+			fmt.Println("Service file does not exist, creating...")
+			return false
+		}
+	}
+	return true
+}
+
+func createServiceFile() error {
+	executable, _ := getDirectoryPaths()
+	serviceContent := fmt.Sprintf(
+		`[Unit]
+	Description=Selfcontrol website blocker
+	
+	[Service]
+	ExecStart="%s"
+	Environment="SELFCONTROL_STARTUP=1"
+	
+	[Install]
+	WantedBy=multi-user.target`, executable)
+
+	// Write the service file
+	err := os.WriteFile("/etc/systemd/system/selfcontrol.service", []byte(serviceContent), 0644)
+	if err != nil {
+		log.Printf("Error creating service file: %v", err)
+		return fmt.Errorf("failed to create service file: %w", err)
+	}
+	log.Println("Service file created successfully.")
+
+	// Reload systemd
+	_, err = exec.Command("sudo", "systemctl", "daemon-reload").Output()
+	if err != nil {
+		log.Printf("Error reloading systemd: %v", err)
+		return fmt.Errorf("failed to reload systemd: %w", err)
+	}
+	log.Println("Systemd reloaded successfully.")
+
+	// Enable the service
+	_, err = exec.Command("sudo", "systemctl", "enable", "selfcontrol.service").Output()
+	if err != nil {
+		log.Printf("Error enabling service: %v", err)
+		return fmt.Errorf("failed to enable service: %w", err)
+	}
+	log.Println("Service enabled successfully.")
+
+	// Start the service
+	_, err = exec.Command("sudo", "systemctl", "start", "selfcontrol.service").Output()
+	if err != nil {
+		log.Printf("Error starting service: %v", err)
+		return fmt.Errorf("failed to start service: %w", err)
+	}
+	log.Println("Service started successfully.")
+
+	return nil
 }
