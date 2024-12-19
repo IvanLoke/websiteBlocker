@@ -151,7 +151,7 @@ func blockSites(all bool, yamlFile string, specificSite string, expiryTime time.
 	return nil
 }
 
-// Removes entries inside etc/hosts that were added by selfcontrol
+// Removes entries inside etc/hosts that were added by selfcontrol and updates the yaml file
 func cleanup(all bool, url string) error {
 	hostsMu.Lock()         // Lock the mutex
 	defer hostsMu.Unlock() // Ensure it gets unlocked at the end
@@ -314,6 +314,13 @@ func removeGouroutine(url string) {
 // Function to block sites when being run in the background and during startup
 func backgroundBlocker(startup bool) {
 	fmt.Println("\n**********Background blocking**********")
+	currentTime := time.Now()
+	parsedTime, err := time.Parse(DateTimeLayout, currentTime.Format(DateTimeLayout))
+	if err != nil {
+		fmt.Printf("Error parsing time: %v\n", err)
+		return
+	}
+	fmt.Println("Time started: ", parsedTime)
 	var path string
 	if startup {
 		path = absolutePathToSelfControl + "/configs/blocked-sites.yaml"
