@@ -1,5 +1,7 @@
 # 🌐 Website Blocker: Boost Your Productivity
 
+### This version eliminates option to manually unblock sites and automatically creates service to have persistent state blocking on boot. PROCEED WITH CAUTION ⚠️⚠️
+
 Stay focused and eliminate distractions with this simple tool. Block websites that hinder your productivity and create a disciplined digital environment.
 
 ## ✨ Features
