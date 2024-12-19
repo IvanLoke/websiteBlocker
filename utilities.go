@@ -200,3 +200,27 @@ func createServiceFile() error {
 
 	return nil
 }
+
+func initAbsPathToSelfControl() {
+	constFilePath := "constants.go" // Update this to the actual path of constants.go
+
+	// Read the current content of the constants file
+	content, err := os.ReadFile(constFilePath)
+	if err != nil {
+		log.Printf("failed to read constants file: %v", err)
+		return
+	}
+
+	_, newPath := getDirectoryPaths()
+	// Update the path in the content
+	updatedContent := strings.Replace(string(content), "placeholder", newPath, 1)
+
+	// Write the updated content back to the file
+	err = os.WriteFile(constFilePath, []byte(updatedContent), 0644)
+	if err != nil {
+		log.Printf("failed to write to constants file: %v", err)
+		return
+	}
+
+	log.Println("Updated constants file successfully.")
+}

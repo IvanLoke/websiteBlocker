@@ -451,11 +451,11 @@ func main() {
 		}
 	}
 
+	// Check if service is enabled
 	if !checkForServiceFile() {
 		fmt.Println("Creating service file")
 		createServiceFile()
 	}
-	// Check if service is enabled
 
 	// Main menu loop
 	for {
@@ -577,9 +577,7 @@ func main() {
 			fmt.Printf("Executable Path: %s\n", exePath)
 			fmt.Printf("Executable Directory: %s\n", exeDir)
 		case "w":
-			if !checkForServiceFile() {
-				createServiceFile()
-			}
+			initAbsPathToSelfControl()
 		// case "15": // Exit Gracefully
 		// 	cleanup(true, "")
 		// 	wgRemove.Wait()
