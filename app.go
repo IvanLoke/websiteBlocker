@@ -604,8 +604,9 @@ func editConfigMenu() {
 	fmt.Println("\n\n **********Edit Schedule Menu**********")
 	fmt.Println("1: Add new site to config")
 	fmt.Println("2: Delete site from config")
-	fmt.Println("3: Edit schedule")
-	fmt.Println("4: Exit")
+	fmt.Println("3: Show schedule")
+	fmt.Println("4: Edit schedule")
+	fmt.Println("5: Exit")
 	fmt.Print("Choose an option: ")
 }
 
@@ -622,14 +623,32 @@ editScheduleLoop:
 		case "2":
 			deleteSiteFromConfig(reader)
 		case "3":
+			displaySchedule()
+		case "4":
 			editScheduleSelection(reader)
 
-		case "4":
+		case "5":
 			fmt.Println("\nExiting...")
 			break editScheduleLoop
 
 		default:
 			fmt.Println("Invalid option")
+		}
+	}
+}
+
+func displaySchedule() {
+	config, err := readConfig(configFilePath)
+	if err != nil {
+		fmt.Println("Error reading config file: ", err)
+		return
+	}
+
+	fmt.Println("\n*** Schedule for Blocking Sites ***")
+	for day, schedules := range config.Schedules {
+		fmt.Printf("%s:\n", strings.ToUpper(day))
+		for i, schedule := range schedules {
+			fmt.Printf("  %d: Start: %s, End: %s\n", i+1, schedule.Start, schedule.End)
 		}
 	}
 }
