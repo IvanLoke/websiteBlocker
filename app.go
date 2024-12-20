@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"os/signal"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -187,6 +186,53 @@ func cleanup(all bool, url string) error {
 	}
 
 	// Removing entries
+	lines := strings.Split(string(content), "\n")
+	var newLines []string
+	removeExtraLine := false
+	for _, line := range lines {
+		if !all && strings.Contains(line, "# Added by selfcontrol") {
+			newLines = append(newLines, line)
+			continue
+		}
+		if !strings.Contains(line, "# Added by selfcontrol") {
+			shouldKeep := true
+			for i := 0; i < len(sites); {
+				site := sites[i]
+				if strings.Contains(line, site) {
+					// Remove the site from the sites array
+					sites = append(sites[:i], sites[i+1:]...) // Remove the matched site
+					shouldKeep = false
+					break
+				} else {
+					i++ // Only increment if no removal
+				}
+			}
+			if shouldKeep {
+				newLines = append(newLines, line)
+			}
+		} else {
+			removeExtraLine = true
+		}
+	}
+
+	if all && removeExtraLine {
+		newLines = newLines[:len(newLines)-1]
+	}
+	// Write back to hosts file
+	return os.WriteFile(hostsFile, []byte(strings.Join(newLines, "\n")), 0644)
+}
+
+func removeBlockedSiteFromHostsFile(all bool, site string, content []byte) error {
+	var sites []string
+	if all {
+		headerSites, err := readConfig(configFilePath)
+		if err != nil {
+			return err
+		}
+
+		// Prepare hosts file entries
+		sites = append(sites, headerSites.Sites...)
+	}
 	lines := strings.Split(string(content), "\n")
 	var newLines []string
 	removeExtraLine := false
@@ -420,7 +466,7 @@ func checkAndCleanupExistingInstance() error {
 func main() {
 	// Check if running in background
 	if os.Getenv("SELFCONTROL_BACKGROUND") == "1" {
-		backgroundBlocker(false)
+		backgroundBlocker2(false)
 		return
 	}
 	if os.Getenv("SELFCONTROL_STARTUP") == "1" {
@@ -428,28 +474,28 @@ func main() {
 		return
 	}
 	// Set up signal handling for graceful shutdown
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	// sigChan := make(chan os.Signal, 1)
+	// signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
-	// function to check if user exitted the programme
-	go func() {
-		sig := <-sigChan
-		fmt.Printf("\nReceived signal: %v\n", sig)
-		// Clean up all blocked sites
-		startBackground()
-		os.Exit(0)
-	}()
+	// // function to check if user exitted the programme
+	// go func() {
+	// 	sig := <-sigChan
+	// 	fmt.Printf("\nReceived signal: %v\n", sig)
+	// 	// Clean up all blocked sites
+	// 	startBackground()
+	// 	os.Exit(0)
+	// }()
 
 	reader := bufio.NewReader(os.Stdin)
 
 	// Verify password before allowing access
-	for {
-		if !verifyPassword(reader) {
-			fmt.Println("Access denied")
-		} else {
-			break
-		}
-	}
+	// for {
+	// 	if !verifyPassword(reader) {
+	// 		fmt.Println("Access denied")
+	// 	} else {
+	// 		break
+	// 	}
+	// }
 
 	// Check if service is enabled
 	if !checkForServiceFile() {
@@ -479,7 +525,7 @@ func main() {
 
 			// Calculate expiry time
 			expiryTime := time.Now().Add(duration)
-
+			fmt.Println(expiryTime)
 			headerSites, err := readBlockedYamlFile(sitesFileLocation)
 			if err != nil {
 				fmt.Printf("Error reading YAML file: %v\n", err)
@@ -569,12 +615,62 @@ func main() {
 				fmt.Println("Password changed successfully")
 			}
 		case "12": // Start process in background
-			startBackground()
+			// startBackground()
 			return
-		// case "15": // Exit Gracefully
-		// 	cleanup(true, "")
-		// 	wgRemove.Wait()
-		// 	return
+		case "q":
+			fmt.Println("Block using schedule")
+			blockSitesStrict(true, configFilePath, "", false)
+		case "w":
+			fmt.Println("Custom Time")
+
+		case "e":
+			fmt.Println("Show current status")
+			if configs, err := readConfig(configFilePath); err != nil {
+				fmt.Printf("Error reading config file: %v\n", err)
+				return
+			} else {
+				if endTime, err := printSitesToBlock(configs, true); err != nil {
+					fmt.Println(err)
+				} else {
+					fmt.Printf("\nBlock is in effect until %s\n", endTime)
+				}
+			}
+		case "r":
+			fmt.Println("Choose which mode to switch to")
+			fmt.Println("1. Strict mode")
+			fmt.Println("2. Normal mode")
+			choice := readUserInput(reader)
+			if choice == "1" {
+				switchModeStrict(1)
+			} else if choice == "2" {
+				switchModeStrict(2)
+			} else {
+				fmt.Println("Invalid option")
+			}
+		case "t":
+			fmt.Println("Accessed normal mode menu")
+		normalModeLoop:
+			for {
+				normalModeMenu()
+				normalmodechoice := readUserInput(reader)
+				switch normalmodechoice {
+				case "1":
+					fmt.Println("Add site to block")
+				case "2":
+					fmt.Println("Stop blocking all sites")
+				case "3":
+					fmt.Println("Stop blocking specific site")
+				case "4":
+					fmt.Println("\nExiting...")
+					break normalModeLoop
+				}
+			}
+
+		case "15": // Exit Gracefully
+			cleanupStrict(true, "")
+			fmt.Println(goroutineContexts)
+			wgRemove.Wait()
+
 		default:
 			fmt.Println("Invalid option")
 		}

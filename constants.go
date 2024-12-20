@@ -8,7 +8,8 @@ const (
 	schedulesFilePath         = "configs/schedules.yaml"
 	passwordFilePath          = "configs/.password"
 	lockFilePath              = "tmp/selfcontrol.lock"
-	absolutePathToSelfControl = "placeholder" //update this to your path to selfcontrol app
+	absolutePathToSelfControl = "/home/ivan/work/voyager/selfcontrol" //update this to your path to selfcontrol app
+	configFilePath            = absolutePathToSelfControl + "/configs/config.yaml"
 )
 
 var daysOfWeek = []string{"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"}
