@@ -33,17 +33,32 @@ func GetNameFromURL(url string) string {
 
 // Function to format time in "HH:MM" format
 func FormatTime(time string) (string, error) {
-	if len(time) > 5 || len(time) < 4 || (len(time) == 5 && time[2] != ':') {
+	if len(time) < 4 || len(time) > 5 || (len(time) == 5 && time[2] != ':') {
 		return "", errors.New("invalid time format")
 	}
-	if _, err := strconv.Atoi(strings.Replace(time, ":", "", -1)); err != nil {
-		return "", errors.New("invalid time format")
-	}
+
 	if len(time) == 4 {
-		return (time[:2] + ":" + time[2:]), nil
-	} else {
-		return time, nil
+		time = time[:2] + ":" + time[2:]
 	}
+
+	// Split into hours and minutes
+	parts := strings.Split(time, ":")
+	if len(parts) != 2 {
+		return "", errors.New("invalid time format")
+	}
+
+	// Parse and validate hours and minutes
+	hours, err := strconv.Atoi(parts[0])
+	if err != nil || hours < 0 || hours > 23 {
+		return "", errors.New("invalid hours")
+	}
+
+	minutes, err := strconv.Atoi(parts[1])
+	if err != nil || minutes < 0 || minutes > 59 {
+		return "", errors.New("invalid minutes")
+	}
+
+	return time, nil
 }
 
 // Function to check if start time is before end time
