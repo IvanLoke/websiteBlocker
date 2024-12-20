@@ -69,7 +69,8 @@ func showMenu() {
 	fmt.Println("3: Enter strict mode")
 	fmt.Println("4: Acess normal mode menu")
 	fmt.Println("5: Edit schedules")
-	fmt.Println("6: Exit")
+	fmt.Println("6: Change password")
+	fmt.Println("7: Exit")
 	fmt.Print("Choose an option: ")
 }
 
@@ -185,7 +186,7 @@ func cleanup(all bool, url string) error {
 	return os.WriteFile(hostsFile, []byte(strings.Join(newLines, "\n")), 0644)
 }
 
-func removeBlockedSiteFromHostsFile(all bool, site string, content []byte) error {
+func removeBlockedSiteFromHostsFile(all bool, content []byte) error {
 	var sites []string
 	if all {
 		headerSites, err := readConfig(configFilePath)
@@ -288,58 +289,6 @@ func removeGouroutine(url string) {
 	wgRemove.Wait()
 }
 
-// Function to block sites when being run in the background and during startup
-func backgroundBlocker(startup bool) {
-	fmt.Println("\n**********Background blocking**********")
-	currentTime := time.Now()
-	parsedTime, err := time.Parse(DateTimeLayout, currentTime.Format(DateTimeLayout))
-	if err != nil {
-		fmt.Printf("Error parsing time: %v\n", err)
-		return
-	}
-	fmt.Println("Time started: ", parsedTime)
-	var path string
-	if startup {
-		path = absolutePathToSelfControl + "/configs/blocked-sites.yaml"
-		// Write the PID to selfcontrol.lock in tmp
-		pid := os.Getpid()
-		lockFilePath := absolutePathToSelfControl + "/tmp/selfcontrol.lock"
-		if err := os.WriteFile(lockFilePath, []byte(fmt.Sprintf("%d", pid)), 0644); err != nil {
-			fmt.Printf("Error writing PID to lock file: %v\n", err)
-			return
-		}
-	} else {
-		path = blockedSitesFilePath
-	}
-	sites, err := readBlockedYamlFile(path)
-	if err != nil {
-		fmt.Printf("Error reading YAML file: %v\n", err)
-		return
-	}
-	// Go through all sites and block them if they are currently blocked and the duration has not expired
-	for _, site := range sites.Sites {
-		parsedTime, err := time.Parse(DateTimeLayout, site.Duration)
-		if err != nil {
-			fmt.Printf("Error parsing duration for site %s: %v\n", site.URL, err)
-			continue
-		}
-		if site.CurrentlyBlocked && time.Now().Before(parsedTime) {
-			fmt.Printf("Blocking %s until %s\n", site.Name, site.Duration)
-			durationTime, err := time.Parse(DateTimeLayout, site.Duration)
-			if err != nil {
-				fmt.Printf("Error parsing duration for site %s: %v\n", site.URL, err)
-				continue
-			}
-			blockSites(false, path, site.URL, durationTime, true)
-		}
-	}
-	fmt.Println(goroutineContexts)
-	wg.Wait()
-	// Once all goroutines are done, cleanup all sites
-	cleanup(true, "")
-	fmt.Println("Background blocking completed")
-}
-
 // Function to check and remove any existing background runtime of application by checking pid on lockfile
 func checkAndCleanupExistingInstance() error {
 	if _, err := os.Stat(lockFilePath); err == nil {
@@ -401,7 +350,7 @@ func checkAndCleanupExistingInstance() error {
 func main() {
 	// Check if running in background
 	if os.Getenv("SELFCONTROL_BACKGROUND") == "1" {
-		backgroundBlocker2(false)
+		backgroundBlocker(false)
 		return
 	}
 	if os.Getenv("SELFCONTROL_STARTUP") == "1" {
@@ -409,7 +358,7 @@ func main() {
 			fmt.Println("Error getting block on restart status:", err)
 			return
 		} else if blocking == "true" {
-			backgroundBlocker2(true)
+			backgroundBlocker(true)
 			changeBlockOnRestartStatus("false")
 			if err := os.Remove(lockFilePath); err != nil {
 				fmt.Printf("Error removing lock file: %v\n", err)
@@ -456,7 +405,7 @@ func main() {
 	}
 
 	// checking if the service was running in the background, if it was, block all sites that should be getting blocked based on schedule
-	err := checkAndCleanupExistingInstance()
+	err := checkAndCleanupExistingInstance() //error indicates that no need to continue blocking sites
 	if err != nil {
 		changeBlockOnRestartStatus("false")
 		fmt.Printf("No background instance detected: %s", err)
@@ -471,18 +420,6 @@ func main() {
 		showMenu()
 		choice := readUserInput(reader)
 		switch choice {
-		case "11": // Change password
-			if err := changePassword(reader); err != nil {
-				fmt.Printf("Error changing password: %v\n", err)
-			} else {
-				fmt.Println("Password changed successfully")
-			}
-		case "12": // Start process in background
-			if len(goroutineContexts) > 0 {
-				startBackground()
-				changeBlockOnRestartStatus("true")
-			}
-			return
 		case "map":
 			fmt.Println(goroutineContexts)
 			fmt.Println("Number of goroutines: ", len(goroutineContexts))
@@ -546,9 +483,18 @@ func main() {
 
 				editConfigSelection(reader)
 			}
-		case "14":
-			stat, _ := getBlockOnRestartStatus()
-			fmt.Println(stat, stat == "true")
+		case "6": // Change password
+			if err := changePassword(reader); err != nil {
+				fmt.Printf("Error changing password: %v\n", err)
+			} else {
+				fmt.Println("Password changed successfully")
+			}
+		case "12": // Start process in background
+			if len(goroutineContexts) > 0 {
+				startBackground()
+				changeBlockOnRestartStatus("true")
+			}
+			return
 		case "15": // Exit Gracefully
 			cleanupStrict()
 			fmt.Println(goroutineContexts)
@@ -1007,7 +953,7 @@ func deleteTimeRangeForDay(reader *bufio.Reader) {
 	}
 
 	fmt.Println("Available days in the schedule:")
-	for day, _ := range config.Schedules {
+	for day := range config.Schedules {
 		fmt.Println(day)
 	}
 

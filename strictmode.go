@@ -106,7 +106,7 @@ func isTimeInRange(currentTime, start, end string) bool {
 	return current.After(startTime) && current.Before(endTime)
 }
 
-// Function that blocks all sites in config yaml
+// Function that blocks all sites in config yaml if it is during schedule time
 func blockSitesStrict(yamlFile string, isInBackground bool) error {
 	var sites []string
 	// Read sites from the specified YAML file
@@ -257,11 +257,11 @@ func switchModeStrict(option int) error {
 	return nil
 }
 
-func backgroundBlocker2(startup bool) {
-	fmt.Println("\n**********Background blocking2**********")
+func backgroundBlocker(startup bool) {
+	fmt.Println("\n**********Background blocking**********")
 	// Remove everything from the hosts file first
 	content, _ := os.ReadFile(hostsFile)
-	removeBlockedSiteFromHostsFile(true, "", content)
+	removeBlockedSiteFromHostsFile(true, content)
 
 	currentTime := time.Now()
 	parsedTime, err := time.Parse(DateTimeLayout, currentTime.Format(DateTimeLayout))
