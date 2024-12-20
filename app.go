@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -47,38 +48,6 @@ type Schedule struct {
 	EndTime   string   `yaml:"endTime"`
 }
 
-// Fcunction to display the status of the blocked sites
-func displayStatus(fileName string) {
-	status, err := readBlockedYamlFile(fileName)
-	if err != nil {
-		return
-	}
-	empty := true
-	fmt.Println("\n***Blocked sites***")
-	for _, site := range status.Sites {
-		parsedTime, err := time.Parse(DateTimeLayout, site.Duration)
-		if err != nil {
-			fmt.Println("Error parsing time:", err)
-			return
-		}
-
-		if parsedTime.Before(time.Now()) || !site.CurrentlyBlocked {
-			continue
-		}
-		empty = false
-		timeDifference := time.Until(parsedTime)      // Get the duration between parsedTime and current time
-		hours := int(timeDifference.Hours())          // Convert to hours
-		minutes := int(timeDifference.Minutes()) % 60 // Convert to minutes
-		seconds := int(timeDifference.Seconds()) % 60 // Convert to seconds and get the remainder
-
-		fmt.Printf("- %-20s Time remaining: %d hours %d minutes and %d seconds\n", site.URL, hours, minutes, seconds)
-		fmt.Printf("- %-20s Expiry Time: %s\n", site.URL, site.Duration)
-	}
-	if empty {
-		fmt.Println("No sites are currently blocked")
-	}
-}
-
 // Function to show schedules from yaml file
 func showSchedules(filepath string) {
 	schedule, err := readScheduleYamlFile(filepath)
@@ -94,20 +63,14 @@ func showSchedules(filepath string) {
 
 func showMenu() {
 	time.Sleep(200 * time.Millisecond)
-	fmt.Println("\n\n ****Self Control Menu****")
-	fmt.Println("1. Block all sites")
-	fmt.Println("2. Show current status")
-	fmt.Println("3. Add new site to block")
-	fmt.Println("4. Edit blocked site duration")
-	fmt.Println("5. Delete site from Config")
-	fmt.Println("6. Show schedules")
-	fmt.Println("7. Load schedule")
-	fmt.Println("8. Create new Schedule")
-	fmt.Println("9. Delete schedule")
-	fmt.Println("10. Edit schedule")
-	fmt.Println("11. Change password")
-	fmt.Println("12. Exit")
-	fmt.Print("\nChoose an option: ")
+	fmt.Println("\n\n **********Self Control Menu**********")
+	fmt.Println("1: Block sites using the schedule")
+	fmt.Println("2: Show current status")
+	fmt.Println("3: Enter strict mode")
+	fmt.Println("4: Acess normal mode menu")
+	fmt.Println("5: Edit schedules")
+	fmt.Println("6: Exit")
+	fmt.Print("Choose an option: ")
 }
 
 // Function to read user input
@@ -269,40 +232,6 @@ func removeBlockedSiteFromHostsFile(all bool, site string, content []byte) error
 	return os.WriteFile(hostsFile, []byte(strings.Join(newLines, "\n")), 0644)
 }
 
-// Function to block sites based on schedule in yaml file
-func loadSchedule(data HeaderSchedule, name string, currentTime time.Time) {
-	for _, schedule := range data.Schedules {
-		if schedule.Name == name {
-			fmt.Printf("Found schedule %s\n", name)
-			for _, day := range schedule.Days {
-				if strings.ToLower(currentTime.Weekday().String()) == day && currentTime.Format("15:04") >= schedule.StartTime && currentTime.Format("15:04") <= schedule.EndTime {
-					fmt.Printf("Block is in effect until %s!\n", schedule.EndTime)
-					endTime, err := time.Parse("15:04", schedule.EndTime)
-					if err != nil {
-						fmt.Printf("Error parsing end time: %v\n", err)
-						break
-					}
-					finalEndTime := time.Date(currentTime.Year(), currentTime.Month(), currentTime.Day(), endTime.Hour(), endTime.Minute(), endTime.Second(), 0, currentTime.Location())
-					blockSites(true, blockedSitesFilePath, "", finalEndTime, false)
-					var headerSite HeaderSite
-					headerSite, err = readBlockedYamlFile(blockedSitesFilePath)
-					if err != nil {
-						fmt.Printf("Error reading blocked sites: %v\n", err)
-					}
-					for _, site := range headerSite.Sites {
-						updateExpiryTime(blockedSitesFilePath, site.URL, finalEndTime, false)
-						editblockedStatusOnYamlFile(blockedSitesFilePath, site.URL, true)
-					}
-					displayStatus(blockedSitesFilePath)
-					return
-				}
-			}
-			fmt.Println("Not time to block sites")
-		}
-	}
-	fmt.Printf("Schedule %s not found\n", name)
-}
-
 // Function to add new goroutine when editing or adding to yaml file
 func addNewGoroutine(url string, expiryTime time.Time, isInBackground bool) {
 	ctx, cancel := context.WithCancel(context.Background()) // Create a new context for each site
@@ -328,7 +257,7 @@ func addNewGoroutine(url string, expiryTime time.Time, isInBackground bool) {
 				return
 			case <-ticker.C: // Counter to automatically remove site after expiry time
 				if time.Now().After(expiry) {
-					cleanup(false, url) // Replace with actual cleanup logic
+					cleanupStrict() // Replace with actual cleanup logic
 					fmt.Printf("Unblocked %s\n", url)
 					showMenu()
 					if isInBackground {
@@ -349,6 +278,10 @@ func removeGouroutine(url string) {
 		cancel() // Cancelling the goroutine using the cancel function found in the map
 		delete(goroutineContexts, url)
 		fmt.Printf("\nCancelled goroutine for site: %s\n", url)
+
+		if _, err := getExpiryTime(); err != nil { // if error, means there are no sites left to block
+			switchModeStrict(2)
+		}
 	}
 	wgRemove.Done()
 	mu.Unlock()
@@ -458,6 +391,8 @@ func checkAndCleanupExistingInstance() error {
 		if err := os.Remove(lockFilePath); err != nil {
 			return fmt.Errorf("error removing lock file: %v", err)
 		}
+	} else {
+		return fmt.Errorf("file does not exist")
 	}
 
 	return nil
@@ -470,7 +405,17 @@ func main() {
 		return
 	}
 	if os.Getenv("SELFCONTROL_STARTUP") == "1" {
-		backgroundBlocker(true)
+		if blocking, err := getBlockOnRestartStatus(); err != nil {
+			fmt.Println("Error getting block on restart status:", err)
+			return
+		} else if blocking == "true" {
+			backgroundBlocker2(true)
+			changeBlockOnRestartStatus("false")
+			if err := os.Remove(lockFilePath); err != nil {
+				fmt.Printf("Error removing lock file: %v\n", err)
+				return
+			}
+		}
 		return
 	}
 	// Set up signal handling for graceful shutdown
@@ -510,104 +455,22 @@ func main() {
 		initAbsPathToSelfControl()
 	}
 
-	// Main menu loop
+	// checking if the service was running in the background, if it was, block all sites that should be getting blocked based on schedule
+	err := checkAndCleanupExistingInstance()
+	if err != nil {
+		changeBlockOnRestartStatus("false")
+		fmt.Printf("No background instance detected: %s", err)
+	} else {
+		fmt.Println("Background instance detected, continuing...")
+		blockSitesStrict(configFilePath, true)
+	}
+	// // Main menu loop
 	for {
 		wgRemove.Wait()
 		time.Sleep(200 * time.Millisecond)
 		showMenu()
 		choice := readUserInput(reader)
 		switch choice {
-		case "1":
-			fmt.Println("Chosen to block sites")
-
-			sitesFileLocation := blockedSitesFilePath
-			duration := getDuration(reader)
-
-			// Calculate expiry time
-			expiryTime := time.Now().Add(duration)
-			fmt.Println(expiryTime)
-			headerSites, err := readBlockedYamlFile(sitesFileLocation)
-			if err != nil {
-				fmt.Printf("Error reading YAML file: %v\n", err)
-				continue
-			}
-			for _, site := range headerSites.Sites {
-				updateExpiryTime(sitesFileLocation, site.URL, expiryTime, false)
-				fmt.Printf("%s blocked until %s\n", site.Name, expiryTime.Format(DateTimeLayout))
-			}
-
-			// Block sites
-			if err := blockSites(true, sitesFileLocation, "", expiryTime, false); err != nil {
-				fmt.Printf("Error blocking sites: %v\n", err)
-				continue
-			}
-
-		case "2": // Show current blocked sites
-			fmt.Println("Chosen to show current status")
-			displayStatus(blockedSitesFilePath)
-
-		case "3": // Add new site to block
-			fmt.Print("Enter site URL: ")
-			site := FormatString(readUserInput(reader))
-			fmt.Print("Enter blocking duration: ")
-			duration := readUserInput(reader)
-			parsedDuration, err := time.ParseDuration(duration)
-			if err != nil {
-				fmt.Printf("Invalid duration format: %v\n", err)
-				continue
-			}
-			expiryTime := time.Now().Add(parsedDuration)
-			name := GetNameFromURL(site)
-			formattedExpiryTime := expiryTime.Format(DateTimeLayout)
-			fmt.Print("Expiry Time: ", formattedExpiryTime)
-			writeToYamlFile(blockedSitesFilePath, name, site, formattedExpiryTime)
-			blockSites(false, blockedSitesFilePath, site, expiryTime, false)
-
-		case "4": // Edit blocked site duration
-			fmt.Print("Enter which site to change expiry time: ")
-			site := FormatString(readUserInput(reader))
-			fmt.Print("Enter new expiry time: ")
-			newExpiryTime := time.Now().Add(getDuration(reader))
-			if err := updateExpiryTime(blockedSitesFilePath, site, newExpiryTime, true); err != nil {
-				fmt.Printf("Error updating expiry time: %v\n", err)
-			}
-
-		case "5": // Delete site from yaml configuration
-			fmt.Print("Enter site to delete from Config: ")
-			site := FormatString(readUserInput(reader))
-			cleanup(false, site)
-			if err := deleteSiteFromYamlFile(blockedSitesFilePath, "", site); err != nil {
-				fmt.Printf("Error deleting site: %v\n", err)
-			}
-		case "6": // Show schedules
-			showSchedules(schedulesFilePath)
-		case "7": // Load schedule
-			currentTime := time.Now()
-			headerSchedule, err := readScheduleYamlFile(schedulesFilePath)
-			if err != nil {
-				fmt.Printf("Error reading schedule file: %v\n", err)
-				continue
-			}
-			fmt.Print("Enter name of schedule: ")
-			name := FormatString(readUserInput(reader))
-			loadSchedule(headerSchedule, name, currentTime)
-
-		case "8": // Create new Schedule
-			createNewSchedule(reader)
-
-		case "9": // Delete schedule
-			fmt.Print("Enter name of schedule to delete: ")
-			name := FormatString(readUserInput(reader))
-			if err := deleteScheduleFromYamlFile(schedulesFilePath, name); err != nil {
-				fmt.Printf("Error deleting schedule: %v\n", err)
-			}
-
-		case "10": // Edit schedule
-			if err := editSchedulesonYamlFile(schedulesFilePath, reader); err != nil {
-				fmt.Printf("Error editing schedule: %v\n", err)
-				continue
-			}
-
 		case "11": // Change password
 			if err := changePassword(reader); err != nil {
 				fmt.Printf("Error changing password: %v\n", err)
@@ -615,15 +478,18 @@ func main() {
 				fmt.Println("Password changed successfully")
 			}
 		case "12": // Start process in background
-			// startBackground()
+			if len(goroutineContexts) > 0 {
+				startBackground()
+				changeBlockOnRestartStatus("true")
+			}
 			return
-		case "q":
+		case "map":
+			fmt.Println(goroutineContexts)
+			fmt.Println("Number of goroutines: ", len(goroutineContexts))
+		case "1":
 			fmt.Println("Block using schedule")
-			blockSitesStrict(true, configFilePath, "", false)
-		case "w":
-			fmt.Println("Custom Time")
-
-		case "e":
+			blockSitesStrict(configFilePath, false)
+		case "2":
 			fmt.Println("Show current status")
 			if configs, err := readConfig(configFilePath); err != nil {
 				fmt.Printf("Error reading config file: %v\n", err)
@@ -635,39 +501,56 @@ func main() {
 					fmt.Printf("\nBlock is in effect until %s\n", endTime)
 				}
 			}
-		case "r":
-			fmt.Println("Choose which mode to switch to")
-			fmt.Println("1. Strict mode")
-			fmt.Println("2. Normal mode")
+		case "3":
+			fmt.Println("You are about to enter strict mode and will not be able to remove blocks until after all blocks have timed out. Are you sure?")
+			fmt.Println("1: Yes")
+			fmt.Println("2: No")
+			fmt.Printf("Enter choice: ")
 			choice := readUserInput(reader)
 			if choice == "1" {
 				switchModeStrict(1)
-			} else if choice == "2" {
-				switchModeStrict(2)
-			} else {
-				fmt.Println("Invalid option")
-			}
-		case "t":
-			fmt.Println("Accessed normal mode menu")
-		normalModeLoop:
-			for {
-				normalModeMenu()
-				normalmodechoice := readUserInput(reader)
-				switch normalmodechoice {
-				case "1":
-					fmt.Println("Add site to block")
-				case "2":
-					fmt.Println("Stop blocking all sites")
-				case "3":
-					fmt.Println("Stop blocking specific site")
-				case "4":
-					fmt.Println("\nExiting...")
-					break normalModeLoop
-				}
 			}
 
+		case "4":
+			if mode, err := checkMode(); err != nil {
+				fmt.Println("Error checking mode:", err)
+				return
+			} else {
+				if mode == "strict" {
+					expiryTime, err := getExpiryTime()
+					if err != nil {
+						fmt.Println("Error getting expiry time:", err)
+						return
+					}
+					fmt.Printf("Cannot access this menu while in Strict Mode. Expires at: %s\n", expiryTime)
+					continue
+				}
+
+				normalModeMenuSelection(reader)
+			}
+
+		case "5":
+			if mode, err := checkMode(); err != nil {
+				fmt.Println("Error checking mode:", err)
+				return
+			} else {
+				if mode == "strict" {
+					expiryTime, err := getExpiryTime()
+					if err != nil {
+						fmt.Println("Error getting expiry time:", err)
+						return
+					}
+					fmt.Printf("Cannot access this menu while in Strict Mode. Expires at: %s\n", expiryTime)
+					continue
+				}
+
+				editConfigSelection(reader)
+			}
+		case "14":
+			stat, _ := getBlockOnRestartStatus()
+			fmt.Println(stat, stat == "true")
 		case "15": // Exit Gracefully
-			cleanupStrict(true, "")
+			cleanupStrict()
 			fmt.Println(goroutineContexts)
 			wgRemove.Wait()
 
@@ -677,6 +560,37 @@ func main() {
 	}
 }
 
+func normalModeMenuSelection(reader *bufio.Reader) {
+	fmt.Println("Accessed normal mode menu")
+normalModeLoop:
+	for {
+		normalModeMenu()
+		normalmodechoice := readUserInput(reader)
+
+		switch normalmodechoice {
+		case "1":
+			fmt.Print("Enter new site to block: ")
+			site := FormatString(readUserInput(reader))
+			addNewSiteToConfig(site)
+
+			// Reapply the blocking rules after adding the new site
+			cleanupStrict()
+			blockSitesStrict(configFilePath, false)
+
+		case "2":
+			fmt.Println("Stop blocking all sites")
+			cleanupStrict()
+
+		case "3":
+			deleteAndUnblockSiteFromConfig(reader)
+
+		case "4":
+			fmt.Println("\nExiting...")
+			break normalModeLoop
+
+		}
+	}
+}
 func getDirectoryPaths() (executablePath string, executableDirectory string) {
 	exePath, err := os.Executable()
 	if err != nil {
@@ -710,7 +624,7 @@ func startBackground() {
 	}
 
 	// Check and clean up any existing instance
-	if err := checkAndCleanupExistingInstance(); err != nil {
+	if err := checkAndCleanupExistingInstance(); err != nil && err.Error() != "file does not exist" {
 		fmt.Printf("Error checking and cleaning up existing instance: %v\n", err)
 		return
 	}
@@ -738,4 +652,150 @@ func startBackground() {
 		return
 	}
 	fmt.Println("Selfcontrol started in background")
+}
+
+func editConfigMenu() {
+	fmt.Println("\n\n **********Edit Schedule Menu**********")
+	fmt.Println("1: Add new site to config")
+	fmt.Println("2: Delete site from config")
+	fmt.Println("3: Edit schedule")
+	fmt.Println("4: Exit")
+}
+
+func editConfigSelection(reader *bufio.Reader) {
+editScheduleLoop:
+	for {
+		editConfigMenu()
+		choice := readUserInput(reader)
+		switch choice {
+		case "1":
+			fmt.Print("Enter new site to block: ")
+			site := FormatString(readUserInput(reader))
+			addNewSiteToConfig(site)
+		case "2":
+			deleteSiteFromConfig(reader)
+		case "3":
+			editScheduleSelection(reader)
+
+		case "4":
+			fmt.Println("\nExiting...")
+			break editScheduleLoop
+
+		default:
+			fmt.Println("Invalid option")
+		}
+	}
+}
+
+func editScheduleMenu() {
+	fmt.Println("\n\n **********Edit Schedule Menu**********")
+	fmt.Println("1: Add new day to schedule")
+	fmt.Println("2: Delete day from schedule")
+	fmt.Println("3: Edit start time of day in schedule")
+	fmt.Println("4: Edit end time of day in schedule")
+	fmt.Println("5: Exit")
+	fmt.Printf("Choose an option: ")
+}
+
+func editScheduleSelection(reader *bufio.Reader) {
+editScheduleLoop:
+	for {
+		editScheduleMenu()
+		choice := readUserInput(reader)
+		switch choice {
+		case "1":
+			fmt.Print("Enter new site to block: ")
+			site := FormatString(readUserInput(reader))
+			addNewSiteToConfig(site)
+		case "2":
+			deleteSiteFromConfig(reader)
+		case "3":
+			editTimeforSchedule(true, reader)
+
+		case "4":
+			editTimeforSchedule(false, reader)
+		case "5":
+			fmt.Println("\nExiting...")
+			break editScheduleLoop
+
+		default:
+			fmt.Println("Invalid option")
+		}
+	}
+}
+
+func editTimeforSchedule(start bool, reader *bufio.Reader) {
+	config, err := readConfig(configFilePath)
+	if err != nil {
+		fmt.Println("Error reading config file: ", err)
+		return
+	}
+
+	// Display the days with schedules
+	fmt.Println("Available days in the schedule:")
+	days := make([]string, 0, len(config.Schedules))
+	index := 1
+	for day := range config.Schedules {
+		days = append(days, day)
+		fmt.Printf("%d: %s\n", index, day)
+		index++
+	}
+
+	// Get user choice for the day
+	fmt.Print("Enter the day you want to edit: ")
+	selectedDay := FormatString(readUserInput(reader))
+
+	// Check if the selected day exists
+	if _, exists := config.Schedules[selectedDay]; !exists {
+		fmt.Println("Invalid day selected.")
+		return
+	}
+
+	// Display the start and end times for the selected day
+	fmt.Printf("Schedules for %s:\n", selectedDay)
+	for i, schedule := range config.Schedules[selectedDay] {
+		fmt.Printf("%d: Start: %s, End: %s\n", i+1, schedule.Start, schedule.End)
+	}
+
+	// Get user choice for which time to edit
+	fmt.Print("Enter the index of the schedule you want to edit: ")
+	choice := FormatString(readUserInput(reader))
+	selectedIndex, err := strconv.Atoi(choice)
+	if err != nil || selectedIndex < 1 || selectedIndex > len(config.Schedules[selectedDay]) {
+		fmt.Println("Invalid index selected.")
+		return
+	}
+	var timeType string
+	if start {
+		timeType = "start"
+	} else {
+		timeType = "end"
+	}
+	// Get the new time
+	fmt.Print("Enter new time in 24H format (HH:MM): ")
+	unformattedtime := readUserInput(reader)
+	newTime, err := FormatTime(unformattedtime)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	// Update the schedule based on user choice
+	scheduleIndex := selectedIndex - 1 // Convert to zero-based index
+	if timeType == "start" {
+		config.Schedules[selectedDay][scheduleIndex].Start = newTime
+	} else if timeType == "end" {
+		config.Schedules[selectedDay][scheduleIndex].End = newTime
+	} else {
+		fmt.Println("Invalid option. Please enter 'start' or 'end'.")
+		return
+	}
+
+	// Write the updated configuration back to the YAML file
+	if err := writeAndSave(configFilePath, config); err != nil {
+		fmt.Printf("Error writing config file: %v\n", err)
+		return
+	}
+
+	fmt.Printf("Successfully updated the %s time for %s to %s.\n", timeType, selectedDay, newTime)
 }

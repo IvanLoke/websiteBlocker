@@ -1,23 +1,23 @@
 sites:
-  - www.facebook.com
-  - www.instagram.com
-  - www.youtube.com
+    - www.facebook.com
+    - www.youtube.com
 schedules:
-  friday:
-    - start: "09:00"
-      end: "11:48"
-    - start: "13:00"
-      end: "17:00"
-  monday:
-    - start: "09:00"
-      end: "11:00"
-    - start: "13:00"
-      end: "17:00"
-  thursday:
-    - start: "09:00"
-      end: "11:00"
-    - start: "13:00"
-      end: "18:02"
+    friday:
+        - start: "08:00"
+          end: "11:48"
+        - start: "13:00"
+          end: "16:45"
+    monday:
+        - start: "08:00"
+          end: "11:00"
+        - start: "13:00"
+          end: "17:00"
+    thursday:
+        - start: "09:00"
+          end: "11:00"
+        - start: "13:00"
+          end: "14:37"
 current_status:
-  started_at: time.....
-  mode: strict
+    started_at: time.....
+    mode: normal
+    block_on_restart: "false"
