@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -252,6 +253,7 @@ func addNewGoroutine(url string, expiryTime time.Time, isInBackground bool) {
 			case <-ctx.Done(): // Check if context is cancelled through the cancel() function in cleanup
 				fmt.Printf("Goroutine for %s cancelled.\n", url)
 				showMenu()
+				switchModeStrict(2)
 				if isInBackground {
 					wg.Done()
 				}
@@ -259,6 +261,7 @@ func addNewGoroutine(url string, expiryTime time.Time, isInBackground bool) {
 			case <-ticker.C: // Counter to automatically remove site after expiry time
 				if time.Now().After(expiry) {
 					cleanupStrict() // Replace with actual cleanup logic
+					switchModeStrict(2)
 					fmt.Printf("Unblocked %s\n", url)
 					showMenu()
 					if isInBackground {
@@ -368,17 +371,20 @@ func main() {
 		return
 	}
 	// Set up signal handling for graceful shutdown
-	// sigChan := make(chan os.Signal, 1)
-	// signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
-	// // function to check if user exitted the programme
-	// go func() {
-	// 	sig := <-sigChan
-	// 	fmt.Printf("\nReceived signal: %v\n", sig)
-	// 	// Clean up all blocked sites
-	// 	startBackground()
-	// 	os.Exit(0)
-	// }()
+	// function to check if user exitted the programme
+	go func() {
+		sig := <-sigChan
+		fmt.Printf("\nReceived signal: %v\n", sig)
+		// Clean up all blocked sites
+		if len(goroutineContexts) > 0 {
+			startBackground()
+			changeBlockOnRestartStatus("true")
+		}
+		os.Exit(0)
+	}()
 
 	reader := bufio.NewReader(os.Stdin)
 
@@ -407,12 +413,12 @@ func main() {
 	// checking if the service was running in the background, if it was, block all sites that should be getting blocked based on schedule
 	err := checkAndCleanupExistingInstance() //error indicates that no need to continue blocking sites
 	if err != nil {
-		changeBlockOnRestartStatus("false")
-		fmt.Printf("No background instance detected: %s", err)
+		fmt.Printf("No background instance detected: %s \n", err)
 	} else {
 		fmt.Println("Background instance detected, continuing...")
 		blockSitesStrict(configFilePath, true)
 	}
+	changeBlockOnRestartStatus("false")
 	// // Main menu loop
 	for {
 		wgRemove.Wait()
@@ -489,7 +495,7 @@ func main() {
 			} else {
 				fmt.Println("Password changed successfully")
 			}
-		case "12": // Start process in background
+		case "7": // Start process in background
 			if len(goroutineContexts) > 0 {
 				startBackground()
 				changeBlockOnRestartStatus("true")

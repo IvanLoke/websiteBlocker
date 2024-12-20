@@ -8,7 +8,7 @@ schedules:
         - start: "13:00"
           end: "16:45"
         - start: "22:00"
-          end: "23:00"
+          end: "23:05"
     monday:
         - start: "09:00"
           end: "17:00"
@@ -19,5 +19,6 @@ schedules:
           end: "14:37"
 current_status:
     started_at: time.....
+    ended_at: 2024-12-20 23:05:00 +0700
     mode: normal
     block_on_restart: "false"

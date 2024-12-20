@@ -20,6 +20,7 @@ type Config struct {
 
 type CurrentStatus struct {
 	StartedAt      string `yaml:"started_at"`
+	EndedAt        string `yaml:"ended_at"`
 	Mode           string `yaml:"mode"`
 	BlockOnRestart string `yaml:"block_on_restart"`
 }
@@ -127,7 +128,7 @@ func blockSitesStrict(yamlFile string, isInBackground bool) error {
 	// Prepare hosts file entries
 	sites = append(sites, headerSites.Sites...)
 	addNewGoroutine("combined", combinedTime, isInBackground)
-
+	editEndingTime(combinedTime.Format(DateTimeLayout))
 	// Update the hosts file with the new entries
 	if err := updateHostsFile(sites); err != nil {
 		return fmt.Errorf("error updating hosts file: %w", err)
@@ -135,6 +136,24 @@ func blockSitesStrict(yamlFile string, isInBackground bool) error {
 
 	return nil
 }
+
+func editEndingTime(newEndingTime string) {
+	config, err := readConfig(configFilePath)
+	if err != nil {
+		fmt.Println("Error reading config file: ", err)
+		return
+	}
+
+	// Update the ending_at field in current_status
+	config.CurrentStatus.EndedAt = newEndingTime
+
+	// Write the updated configuration back to the YAML file
+	if err := writeAndSave(configFilePath, config); err != nil {
+		fmt.Printf("Error writing config file: %v\n", err)
+		return
+	}
+}
+
 func cleanupStrict() error {
 	hostsMu.Lock()         // Lock the mutex
 	defer hostsMu.Unlock() // Ensure it gets unlocked at the end
