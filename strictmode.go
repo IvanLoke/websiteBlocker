@@ -107,11 +107,47 @@ func isTimeInRange(currentTime, start, end string) bool {
 	return current.After(startTime) && current.Before(endTime)
 }
 
+func blockSitesCustomTime(yamlFile string, isInBackground bool, duration string) error {
+	var sites []string
+	// Read sites from the specified YAML file
+	headerSites, err := readConfig(yamlFile)
+	if err != nil {
+		return fmt.Errorf("error reading YAML file: %w", err)
+	}
+	parsedDuration, err := time.ParseDuration(duration)
+	if err != nil {
+		return fmt.Errorf("invalid duration format: %w", err)
+	}
+	expiryTime := time.Now().Add(parsedDuration).Format("15:04")
+	fmt.Println("Blocking sites until", expiryTime)
+	currentDate := time.Now()
+	expiryTimeParsed, _ := time.Parse("15:04", expiryTime)
+	combinedTime := time.Date(currentDate.Year(), currentDate.Month(), currentDate.Day(),
+		expiryTimeParsed.Hour(), expiryTimeParsed.Minute(), 0, 0, currentDate.Location())
+
+	// Prepare hosts file entries
+	sites = append(sites, headerSites.Sites...)
+	addNewGoroutine("combined", combinedTime, isInBackground)
+	editEndingTime(combinedTime.Format(DateTimeLayout))
+	// Update the hosts file with the new entries
+	if err := updateHostsFile(sites); err != nil {
+		return fmt.Errorf("error updating hosts file: %w", err)
+	}
+	fmt.Println("Following sites are blocked until", expiryTime)
+	for _, site := range sites {
+		fmt.Println("- ", site)
+	}
+	return nil
+}
+
 // Function that blocks all sites in config yaml if it is during schedule time
 func blockSitesStrict(yamlFile string, isInBackground bool) error {
 	var sites []string
 	// Read sites from the specified YAML file
 	headerSites, err := readConfig(yamlFile)
+	if err != nil {
+		return fmt.Errorf("error reading YAML file: %w", err)
+	}
 	expiryTime, errSites := printSitesToBlock(headerSites, false)
 	if errSites != nil {
 		return fmt.Errorf("no sites to block")
@@ -121,9 +157,6 @@ func blockSitesStrict(yamlFile string, isInBackground bool) error {
 	expiryTimeParsed, _ := time.Parse("15:04", expiryTime)
 	combinedTime := time.Date(currentDate.Year(), currentDate.Month(), currentDate.Day(),
 		expiryTimeParsed.Hour(), expiryTimeParsed.Minute(), 0, 0, currentDate.Location())
-	if err != nil {
-		return fmt.Errorf("error reading YAML file: %w", err)
-	}
 
 	// Prepare hosts file entries
 	sites = append(sites, headerSites.Sites...)
@@ -135,6 +168,14 @@ func blockSitesStrict(yamlFile string, isInBackground bool) error {
 	}
 
 	return nil
+}
+
+func getEndingTime() (string, error) {
+	config, err := readConfig(configFilePath)
+	if err != nil {
+		return "", err
+	}
+	return config.CurrentStatus.EndedAt, nil
 }
 
 func editEndingTime(newEndingTime string) {
@@ -300,7 +341,7 @@ func backgroundBlocker(startup bool) {
 			return
 		}
 	} else {
-		path = configFilePath
+		path = absolutePathToSelfControl + "/configs/config.yaml"
 	}
 
 	// Block all the sites in the config file
@@ -310,6 +351,8 @@ func backgroundBlocker(startup bool) {
 		fmt.Println("Background blocking completed")
 		return
 	}
+	// endingTime, _ := getEndingTime()
+	// blockSitesCustomTime(path, true, endingTime)
 	fmt.Println(goroutineContexts)
 	wg.Wait()
 	// Once all goroutines are done, cleanup all sites
@@ -324,6 +367,13 @@ func addNewSiteToConfig(site string) {
 		return
 	}
 
+	for _, existingSite := range config.Sites {
+		if strings.EqualFold(existingSite, site) { // Case insensitive comparison
+			fmt.Println("This site is already in the configuration.")
+			return
+		}
+	}
+
 	config.Sites = append(config.Sites, site)
 	if err := writeAndSave(configFilePath, config); err != nil {
 		fmt.Printf("Error writing to config file: %v\n", err)
@@ -334,7 +384,7 @@ func addNewSiteToConfig(site string) {
 func normalModeMenu() {
 	time.Sleep(210 * time.Millisecond)
 	fmt.Println("\n**********Normal Mode**********")
-	fmt.Println("1. Enter new site to block")
+	fmt.Println("1. Enter new site to block and block all sites")
 	fmt.Println("2. Unblock sites")
 	fmt.Println("3. Remove site from block list and unblock")
 	fmt.Println("4. Exit")

@@ -68,10 +68,11 @@ func showMenu() {
 	fmt.Println("1: Block sites using the schedule")
 	fmt.Println("2: Show current status")
 	fmt.Println("3: Enter strict mode")
-	fmt.Println("4: Acess normal mode menu")
-	fmt.Println("5: Edit schedules")
-	fmt.Println("6: Change password")
-	fmt.Println("7: Exit")
+	fmt.Println("4: Add sites to block")
+	fmt.Println("5: Acess normal mode menu")
+	fmt.Println("6: Edit schedules")
+	fmt.Println("7: Change password")
+	fmt.Println("8: Exit")
 	fmt.Print("Choose an option: ")
 }
 
@@ -388,14 +389,14 @@ func main() {
 
 	reader := bufio.NewReader(os.Stdin)
 
-	// Verify password before allowing access
-	// for {
-	// 	if !verifyPassword(reader) {
-	// 		fmt.Println("Access denied")
-	// 	} else {
-	// 		break
-	// 	}
-	// }
+	//Verify password before allowing access
+	for {
+		if !verifyPassword(reader) {
+			fmt.Println("Access denied")
+		} else {
+			break
+		}
+	}
 
 	// Check if service is enabled
 	if !checkForServiceFile() {
@@ -426,9 +427,9 @@ func main() {
 		showMenu()
 		choice := readUserInput(reader)
 		switch choice {
-		case "map":
-			fmt.Println(goroutineContexts)
-			fmt.Println("Number of goroutines: ", len(goroutineContexts))
+		// case "map":
+		// 	fmt.Println(goroutineContexts)
+		// 	fmt.Println("Number of goroutines: ", len(goroutineContexts))
 		case "1":
 			fmt.Println("Block using schedule")
 			blockSitesStrict(configFilePath, false)
@@ -455,6 +456,23 @@ func main() {
 			}
 
 		case "4":
+			fmt.Print("Enter new site to block: ")
+			site := FormatString(readUserInput(reader))
+			addNewSiteToConfig(site)
+			fmt.Println("Do you want to start blocking all new sites now?")
+			fmt.Println("1: Yes")
+			fmt.Println("2: No")
+			fmt.Print("Enter choice: ")
+			choice := readUserInput(reader)
+			if choice == "1" {
+				cleanupStrict()
+				blockSitesStrict(configFilePath, false)
+				if mode, _ := checkMode(); mode == "strict" {
+					time.Sleep(202 * time.Millisecond)
+					switchModeStrict(1)
+				}
+			}
+		case "5":
 			if mode, err := checkMode(); err != nil {
 				fmt.Println("Error checking mode:", err)
 				return
@@ -472,7 +490,7 @@ func main() {
 				normalModeMenuSelection(reader)
 			}
 
-		case "5":
+		case "6":
 			if mode, err := checkMode(); err != nil {
 				fmt.Println("Error checking mode:", err)
 				return
@@ -489,22 +507,18 @@ func main() {
 
 				editConfigSelection(reader)
 			}
-		case "6": // Change password
+		case "7": // Change password
 			if err := changePassword(reader); err != nil {
 				fmt.Printf("Error changing password: %v\n", err)
 			} else {
 				fmt.Println("Password changed successfully")
 			}
-		case "7": // Start process in background
+		case "8": // Start process in background
 			if len(goroutineContexts) > 0 {
 				startBackground()
 				changeBlockOnRestartStatus("true")
 			}
 			return
-		case "15": // Exit Gracefully
-			cleanupStrict()
-			fmt.Println(goroutineContexts)
-			wgRemove.Wait()
 
 		default:
 			fmt.Println("Invalid option")
