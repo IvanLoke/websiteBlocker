@@ -355,6 +355,11 @@ func main() {
 	// Check if running in background
 	if os.Getenv("SELFCONTROL_BACKGROUND") == "1" {
 		backgroundBlocker(false)
+		changeBlockOnRestartStatus("false")
+		if err := os.Remove(lockFilePath); err != nil {
+			fmt.Printf("Error removing lock file: %v\n", err)
+			return
+		}
 		return
 	}
 	if os.Getenv("SELFCONTROL_STARTUP") == "1" {
@@ -413,11 +418,12 @@ func main() {
 
 	// checking if the service was running in the background, if it was, block all sites that should be getting blocked based on schedule
 	err := checkAndCleanupExistingInstance() //error indicates that no need to continue blocking sites
-	if err != nil {
-		fmt.Printf("No background instance detected: %s \n", err)
-	} else {
+	blocking, _ := getBlockOnRestartStatus()
+	if err == nil && blocking == "true" {
 		fmt.Println("Background instance detected, continuing...")
 		blockSitesStrict(configFilePath, true)
+	} else {
+		fmt.Printf("No background instance detected: %s \n", err)
 	}
 	changeBlockOnRestartStatus("false")
 	// // Main menu loop
