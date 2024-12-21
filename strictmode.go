@@ -19,10 +19,11 @@ type Config struct {
 }
 
 type CurrentStatus struct {
-	StartedAt      string `yaml:"started_at"`
-	EndedAt        string `yaml:"ended_at"`
-	Mode           string `yaml:"mode"`
-	BlockOnRestart string `yaml:"block_on_restart"`
+	StartedAt       string `yaml:"started_at"`
+	EndedAt         string `yaml:"ended_at"`
+	Mode            string `yaml:"mode"`
+	BlockOnRestart  string `yaml:"block_on_restart"`
+	BlockCustomTime string `yaml:"block_custom_time"`
 }
 
 type TimeRange struct {
@@ -107,33 +108,28 @@ func isTimeInRange(currentTime, start, end string) bool {
 	return current.After(startTime) && current.Before(endTime)
 }
 
-func blockSitesCustomTime(yamlFile string, isInBackground bool, duration string) error {
+func blockSitesCustomTime(yamlFile string, isInBackground bool, expiryTime time.Time) error {
 	var sites []string
 	// Read sites from the specified YAML file
 	headerSites, err := readConfig(yamlFile)
 	if err != nil {
 		return fmt.Errorf("error reading YAML file: %w", err)
 	}
-	parsedDuration, err := time.ParseDuration(duration)
-	if err != nil {
-		return fmt.Errorf("invalid duration format: %w", err)
-	}
-	expiryTime := time.Now().Add(parsedDuration).Format("15:04")
-	fmt.Println("Blocking sites until", expiryTime)
-	currentDate := time.Now()
-	expiryTimeParsed, _ := time.Parse("15:04", expiryTime)
-	combinedTime := time.Date(currentDate.Year(), currentDate.Month(), currentDate.Day(),
-		expiryTimeParsed.Hour(), expiryTimeParsed.Minute(), 0, 0, currentDate.Location())
+
+	fmt.Println("Blocking sites until", expiryTime.Format("15:04:05"))
 
 	// Prepare hosts file entries
 	sites = append(sites, headerSites.Sites...)
-	addNewGoroutine("combined", combinedTime, isInBackground)
-	editEndingTime(combinedTime.Format(DateTimeLayout))
+	addNewGoroutine("combined", expiryTime, isInBackground) // Pass the expiryTime directly
+	editEndingTime(expiryTime.Format(DateTimeLayout))
+	editBlockCustomTimeStatus("true")
+
 	// Update the hosts file with the new entries
 	if err := updateHostsFile(sites); err != nil {
 		return fmt.Errorf("error updating hosts file: %w", err)
 	}
-	fmt.Println("Following sites are blocked until", expiryTime)
+
+	fmt.Println("Following sites are blocked until", expiryTime.Format("15:04:05"))
 	for _, site := range sites {
 		fmt.Println("- ", site)
 	}
@@ -161,7 +157,9 @@ func blockSitesStrict(yamlFile string, isInBackground bool) error {
 	// Prepare hosts file entries
 	sites = append(sites, headerSites.Sites...)
 	addNewGoroutine("combined", combinedTime, isInBackground)
-	editEndingTime(combinedTime.Format(DateTimeLayout))
+
+	// Remove custom time blocking status
+	editBlockCustomTimeStatus("false")
 	// Update the hosts file with the new entries
 	if err := updateHostsFile(sites); err != nil {
 		return fmt.Errorf("error updating hosts file: %w", err)
@@ -195,6 +193,19 @@ func editEndingTime(newEndingTime string) {
 	}
 }
 
+func editBlockCustomTimeStatus(status string) {
+	config, err := readConfig(configFilePath)
+	if err != nil {
+		fmt.Printf("Error reading config file: %v\n", err)
+		return
+	}
+	config.CurrentStatus.BlockCustomTime = status
+	if err := writeAndSave(configFilePath, config); err != nil {
+		fmt.Printf("Error writing to config file: %v\n", err)
+		return
+	}
+	fmt.Println("Block custom time status changed successfully")
+}
 func cleanupStrict() error {
 	hostsMu.Lock()         // Lock the mutex
 	defer hostsMu.Unlock() // Ensure it gets unlocked at the end
@@ -214,6 +225,8 @@ func cleanupStrict() error {
 	}
 	sites = append(sites, headerSites.Sites...)
 	removeGouroutine("combined")
+
+	editBlockCustomTimeStatus("false")
 
 	removeline := false
 	// Removing entries
@@ -317,6 +330,15 @@ func switchModeStrict(option int) error {
 	return nil
 }
 
+func getBlockCustomTimeStatus() (string, error) {
+	config, err := readConfig(configFilePath)
+	if err != nil {
+		return "", err
+	}
+	return config.CurrentStatus.BlockCustomTime, nil
+}
+
+// run only if goroutine map not empty on exit or during startup
 func backgroundBlocker(startup bool) {
 	fmt.Println("\n**********Background blocking**********")
 	// Remove everything from the hosts file first
@@ -344,15 +366,32 @@ func backgroundBlocker(startup bool) {
 		path = absolutePathToSelfControl + "/configs/config.yaml"
 	}
 
-	// Block all the sites in the config file
-	blockerr := blockSitesStrict(path, true)
-	if blockerr != nil {
-		fmt.Printf("Error blocking sites: %v\n", blockerr)
-		fmt.Println("Background blocking completed")
+	status, err := getBlockCustomTimeStatus()
+	if err != nil {
+		fmt.Printf("Error getting block custom time status: %v\n", err)
 		return
 	}
-	// endingTime, _ := getEndingTime()
-	// blockSitesCustomTime(path, true, endingTime)
+	if status == "true" {
+		endTime, errEndTime := getEndingTime()
+		if errEndTime != nil {
+			fmt.Printf("Error getting ending time: %v\n", errEndTime)
+			return
+		}
+		parsedEndTime, err := time.Parse("2006-01-02 15:04:05 -0700", endTime)
+		if err != nil {
+			fmt.Printf("Error parsing end time: %v\n", err)
+			return
+		}
+		blockSitesCustomTime(path, true, parsedEndTime)
+	} else {
+		// Block all the sites in the config file
+		blockerr := blockSitesStrict(path, true)
+		if blockerr != nil {
+			fmt.Printf("Error blocking sites: %v\n", blockerr)
+			fmt.Println("Background blocking completed")
+			return
+		}
+	}
 	fmt.Println(goroutineContexts)
 	wg.Wait()
 	// Once all goroutines are done, cleanup all sites

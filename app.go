@@ -394,14 +394,14 @@ func main() {
 
 	reader := bufio.NewReader(os.Stdin)
 
-	//Verify password before allowing access
-	for {
-		if !verifyPassword(reader) {
-			fmt.Println("Access denied")
-		} else {
-			break
-		}
-	}
+	// //Verify password before allowing access
+	// for {
+	// 	if !verifyPassword(reader) {
+	// 		fmt.Println("Access denied")
+	// 	} else {
+	// 		break
+	// 	}
+	// }
 
 	// Check if service is enabled
 	if !checkForServiceFile() {
@@ -421,7 +421,20 @@ func main() {
 	blocking, _ := getBlockOnRestartStatus()
 	if err == nil && blocking == "true" {
 		fmt.Println("Background instance detected, continuing...")
-		blockSitesStrict(configFilePath, true)
+		if status, err := getBlockCustomTimeStatus(); err == nil && status == "true" {
+			if endTime, err := getEndingTime(); err != nil {
+				fmt.Println("Error getting ending time:", err)
+			} else {
+				parsedEndTime, err := time.Parse(DateTimeLayout, endTime)
+				if err != nil {
+					fmt.Println("Error parsing end time:", err)
+					return
+				}
+				blockSitesCustomTime(configFilePath, true, parsedEndTime)
+			}
+		} else {
+			blockSitesStrict(configFilePath, true)
+		}
 	} else {
 		fmt.Printf("No background instance detected: %s \n", err)
 	}
@@ -433,9 +446,20 @@ func main() {
 		showMenu()
 		choice := readUserInput(reader)
 		switch choice {
-		// case "map":
-		// 	fmt.Println(goroutineContexts)
-		// 	fmt.Println("Number of goroutines: ", len(goroutineContexts))
+		case "map":
+			fmt.Println(goroutineContexts)
+			fmt.Println("Number of goroutines: ", len(goroutineContexts))
+		case "q":
+			fmt.Println("Block for specific time")
+			duration := getDuration(reader)
+
+			// Calculate the expiry time directly by adding the duration to the current time
+			expiryTime := time.Now().Add(duration)
+
+			// Call the blockSitesCustomTime function with the calculated expiry time
+			blockSitesCustomTime(configFilePath, false, expiryTime)
+		case "w":
+			cleanupStrict()
 		case "1":
 			fmt.Println("Block using schedule")
 			blockSitesStrict(configFilePath, false)
