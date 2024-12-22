@@ -476,11 +476,6 @@ func main() {
 				fmt.Println("No sites are currently blocked")
 				continue
 			}
-			var configs *Config
-			if configs, err = readConfig(configFilePath); err != nil {
-				fmt.Printf("Error reading config file: %v\n", err)
-				return
-			}
 
 			// Check if blocking is active
 			if status, err := getBlockCustomTimeStatus(); err != nil {
@@ -495,9 +490,10 @@ func main() {
 				}
 			} else {
 				// If blocking is not active, print the sites to block
-				if endTime, err := printSitesToBlock(configs, true); err != nil {
+				if endTime, err := getExpiryTime(); err != nil {
 					fmt.Println(err)
 				} else {
+					printAllSites()
 					fmt.Printf("\nBlock is in effect until %s\n", endTime)
 				}
 			}

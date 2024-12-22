@@ -584,16 +584,43 @@ func switchingStrictModeMenu(reader *bufio.Reader) {
 }
 
 func printAllSites() {
-	// Read the configuration from the YAML file
-	config, err := readConfig(configFilePath)
+	// Define the path to the hosts file
+	hostsFilePath := "/etc/hosts" // Adjust this path if necessary
+
+	// Read the contents of the hosts file
+	content, err := os.ReadFile(hostsFilePath)
 	if err != nil {
-		fmt.Printf("Error reading config file: %v\n", err)
+		fmt.Printf("Error reading hosts file: %v\n", err)
 		return
 	}
 
-	// Print the sites
+	// Split the content into lines
+	lines := strings.Split(string(content), "\n")
 	fmt.Println("Blocked Sites:")
-	for _, site := range config.Sites {
-		fmt.Println("- " + site)
+
+	// Flag to indicate whether we're in the relevant section
+	inSelfControlSection := false
+
+	for _, line := range lines {
+		// Check for the start of the self-control section
+		if strings.Contains(line, "# Added by selfcontrol") {
+			inSelfControlSection = true
+			continue // Skip the line with the comment
+		}
+
+		// If we are in the self-control section, print the sites
+		if inSelfControlSection {
+			// Ignore comments and empty lines
+			if strings.HasPrefix(line, "#") || strings.TrimSpace(line) == "" {
+				continue
+			}
+
+			// Split the line into parts
+			parts := strings.Fields(line)
+			if len(parts) > 1 && parts[0] == "127.0.0.1" {
+				// The second part is the URL to block
+				fmt.Println("- " + parts[1])
+			}
+		}
 	}
 }
