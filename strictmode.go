@@ -168,6 +168,7 @@ func blockSitesStrict(yamlFile string, isInBackground bool) error {
 	return nil
 }
 
+// Function to get ending time for custom time in yaml
 func getEndingTime() (string, error) {
 	config, err := readConfig(configFilePath)
 	if err != nil {
@@ -176,6 +177,7 @@ func getEndingTime() (string, error) {
 	return config.CurrentStatus.EndedAt, nil
 }
 
+// Function to edit ending time for custom time in yaml
 func editEndingTime(newEndingTime string) {
 	config, err := readConfig(configFilePath)
 	if err != nil {
@@ -193,6 +195,16 @@ func editEndingTime(newEndingTime string) {
 	}
 }
 
+// Function to get custom time blocking status in yaml
+func getBlockCustomTimeStatus() (string, error) {
+	config, err := readConfig(configFilePath)
+	if err != nil {
+		return "", err
+	}
+	return config.CurrentStatus.BlockCustomTime, nil
+}
+
+// Function to change blockcustomtime status in yaml true or false
 func editBlockCustomTimeStatus(status string) {
 	config, err := readConfig(configFilePath)
 	if err != nil {
@@ -206,6 +218,8 @@ func editBlockCustomTimeStatus(status string) {
 	}
 	fmt.Println("Block custom time status changed successfully")
 }
+
+// Function to remove all goroutines and cleanup the hosts file, sets blockcustomtime status to false
 func cleanupStrict() error {
 	hostsMu.Lock()         // Lock the mutex
 	defer hostsMu.Unlock() // Ensure it gets unlocked at the end
@@ -330,14 +344,6 @@ func switchModeStrict(option int) error {
 	return nil
 }
 
-func getBlockCustomTimeStatus() (string, error) {
-	config, err := readConfig(configFilePath)
-	if err != nil {
-		return "", err
-	}
-	return config.CurrentStatus.BlockCustomTime, nil
-}
-
 // run only if goroutine map not empty on exit or during startup
 func backgroundBlocker(startup bool) {
 	fmt.Println("\n**********Background blocking**********")
@@ -366,6 +372,7 @@ func backgroundBlocker(startup bool) {
 		path = absolutePathToSelfControl + "/configs/config.yaml"
 	}
 
+	// Check if it is blocking based on time or schedule
 	status, err := getBlockCustomTimeStatus()
 	if err != nil {
 		fmt.Printf("Error getting block custom time status: %v\n", err)
@@ -460,6 +467,8 @@ func deleteAndUnblockSiteFromConfig(reader *bufio.Reader) {
 	removeBlockedSiteFromConfig(site)
 	blockSitesStrict(configFilePath, false)
 }
+
+// Function to get block on restart status in yaml
 func getBlockOnRestartStatus() (string, error) {
 	config, err := readConfig(configFilePath)
 	if err != nil {
@@ -479,4 +488,72 @@ func changeBlockOnRestartStatus(status string) {
 		return
 	}
 	fmt.Println("Block on restart status changed successfully")
+}
+
+// Function that checks strict mode and blocks access if it is
+func accessingMenusInStrictMode() bool {
+	mode, err := checkMode()
+	if err != nil {
+		fmt.Println("Error checking mode:", err)
+		return false
+	}
+
+	if mode == "strict" {
+		var expiryTime string
+
+		status, err := getBlockCustomTimeStatus()
+		if err == nil && status == "true" {
+			expiryTime, err = getEndingTime()
+		} else {
+			expiryTime, err = getExpiryTime()
+		}
+
+		if err != nil {
+			fmt.Println("Error getting expiry time:", err)
+			return false
+		}
+
+		fmt.Printf("Cannot access this menu while in Strict Mode. Expires at: %s\n", expiryTime)
+		return false
+	}
+
+	// If not in strict mode, return true to allow access.
+	return true
+}
+
+func switchingStrictModeMenu(reader *bufio.Reader) {
+	fmt.Println("Select an option:")
+	fmt.Println("1: Turn on strict mode")
+	fmt.Println("2: Turn off strict mode")
+	fmt.Printf("Enter choice: ")
+	choice := readUserInput(reader)
+
+	if choice == "1" {
+		fmt.Println("You are about to enter strict mode and will not be able to remove blocks until after all blocks have timed out. Are you sure?")
+		fmt.Println("1: Yes")
+		fmt.Println("2: No")
+		fmt.Printf("Enter choice: ")
+		confirm := readUserInput(reader)
+		if confirm == "1" {
+			switchModeStrict(1)
+		}
+	} else if choice == "2" {
+		// Check if any sites are currently being blocked in strict mode
+		status := len(goroutineContexts) > 0
+
+		if status {
+			fmt.Println("Cannot turn off strict mode because sites are currently being blocked.")
+		} else {
+			fmt.Println("You are about to turn off strict mode. Are you sure?")
+			fmt.Println("1: Yes")
+			fmt.Println("2: No")
+			fmt.Printf("Enter choice: ")
+			confirm := readUserInput(reader)
+			if confirm == "1" {
+				switchModeStrict(2) // Assuming 0 is for normal mode
+			}
+		}
+	} else {
+		fmt.Println("Invalid choice. Please try again.")
+	}
 }

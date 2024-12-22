@@ -461,30 +461,45 @@ func main() {
 		case "w":
 			cleanupStrict()
 		case "1":
-			fmt.Println("Block using schedule")
-			blockSitesStrict(configFilePath, false)
+			if mode, err := checkMode(); err == nil && mode == "strict" && len(goroutineContexts) > 0 {
+				fmt.Println("Wait until strict mode is done before starting schedule")
+			} else {
+				fmt.Println("Block using schedule")
+				blockSitesStrict(configFilePath, false)
+			}
 		case "2":
 			fmt.Println("Show current status")
-			if configs, err := readConfig(configFilePath); err != nil {
+			if len(goroutineContexts) == 0 {
+				fmt.Println("No sites are currently blocked")
+				continue
+			}
+			var configs *Config
+			if configs, err = readConfig(configFilePath); err != nil {
 				fmt.Printf("Error reading config file: %v\n", err)
 				return
+			}
+
+			// Check if blocking is active
+			if status, err := getBlockCustomTimeStatus(); err != nil {
+				fmt.Printf("Error getting block status: %v\n", err)
+			} else if status == "true" {
+				// If blocking is active, get the ending time
+				if endTime, err := getEndingTime(); err != nil {
+					fmt.Println("Error getting ending time:", err)
+				} else {
+					fmt.Printf("Block is in effect until %s\n", endTime)
+				}
 			} else {
+				// If blocking is not active, print the sites to block
 				if endTime, err := printSitesToBlock(configs, true); err != nil {
 					fmt.Println(err)
 				} else {
 					fmt.Printf("\nBlock is in effect until %s\n", endTime)
 				}
 			}
-		case "3":
-			fmt.Println("You are about to enter strict mode and will not be able to remove blocks until after all blocks have timed out. Are you sure?")
-			fmt.Println("1: Yes")
-			fmt.Println("2: No")
-			fmt.Printf("Enter choice: ")
-			choice := readUserInput(reader)
-			if choice == "1" {
-				switchModeStrict(1)
-			}
 
+		case "3":
+			switchingStrictModeMenu(reader)
 		case "4":
 			fmt.Print("Enter new site to block: ")
 			site := FormatString(readUserInput(reader))
@@ -495,46 +510,60 @@ func main() {
 			fmt.Print("Enter choice: ")
 			choice := readUserInput(reader)
 			if choice == "1" {
-				cleanupStrict()
-				blockSitesStrict(configFilePath, false)
-				if mode, _ := checkMode(); mode == "strict" {
+				// Check if blocking is active
+				status, err := getBlockCustomTimeStatus()
+				if err != nil {
+					fmt.Printf("Error getting block status: %v\n", err)
+					return // Exit or handle the error as needed
+				}
+
+				if status == "true" {
+					// If blocking is active, get the ending time
+					endTime, err := getEndingTime()
+					if err != nil {
+						fmt.Println("Error getting ending time:", err)
+						return
+					}
+
+					// Parse the ending time
+					parsedEndTime, err := time.Parse(DateTimeLayout, endTime)
+					if err != nil {
+						fmt.Println("Error parsing end time:", err)
+						return
+					}
+					cleanupStrict()
+					// Block sites using the custom time
+					if err := blockSitesCustomTime(configFilePath, false, parsedEndTime); err != nil {
+						fmt.Printf("Error blocking sites: %v\n", err)
+						return
+					}
+				} else {
+					cleanupStrict()
+					// If blocking is not active, block all sites in strict mode
+					if err := blockSitesStrict(configFilePath, false); err != nil {
+						fmt.Printf("Error blocking sites in strict mode: %v\n", err)
+						return
+					}
+				}
+
+				// Check and switch mode if necessary
+				mode, err := checkMode()
+				if err != nil {
+					fmt.Printf("Error checking mode: %v\n", err)
+					return
+				}
+				if mode == "strict" {
 					time.Sleep(202 * time.Millisecond)
-					switchModeStrict(1)
+					switchModeStrict(1) // Switch to strict mode
 				}
 			}
 		case "5":
-			if mode, err := checkMode(); err != nil {
-				fmt.Println("Error checking mode:", err)
-				return
-			} else {
-				if mode == "strict" {
-					expiryTime, err := getExpiryTime()
-					if err != nil {
-						fmt.Println("Error getting expiry time:", err)
-						return
-					}
-					fmt.Printf("Cannot access this menu while in Strict Mode. Expires at: %s\n", expiryTime)
-					continue
-				}
-
+			if accessingMenusInStrictMode() {
 				normalModeMenuSelection(reader)
 			}
 
 		case "6":
-			if mode, err := checkMode(); err != nil {
-				fmt.Println("Error checking mode:", err)
-				return
-			} else {
-				if mode == "strict" {
-					expiryTime, err := getExpiryTime()
-					if err != nil {
-						fmt.Println("Error getting expiry time:", err)
-						return
-					}
-					fmt.Printf("Cannot access this menu while in Strict Mode. Expires at: %s\n", expiryTime)
-					continue
-				}
-
+			if accessingMenusInStrictMode() {
 				editConfigSelection(reader)
 			}
 		case "7": // Change password
