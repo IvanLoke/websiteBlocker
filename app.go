@@ -439,6 +439,9 @@ func main() {
 		fmt.Printf("No background instance detected: %s \n", err)
 	}
 	changeBlockOnRestartStatus("false")
+	if len(goroutineContexts) == 0 {
+		switchModeStrict(2)
+	}
 	// // Main menu loop
 	for {
 		wgRemove.Wait()
@@ -488,6 +491,7 @@ func main() {
 					fmt.Println("Error getting ending time:", err)
 				} else {
 					fmt.Printf("Block is in effect until %s\n", endTime)
+					printAllSites()
 				}
 			} else {
 				// If blocking is not active, print the sites to block

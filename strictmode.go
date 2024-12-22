@@ -463,9 +463,34 @@ func deleteSiteFromConfig(reader *bufio.Reader) {
 }
 func deleteAndUnblockSiteFromConfig(reader *bufio.Reader) {
 	site := queryForSchedule(reader)
-	cleanupStrict()
-	removeBlockedSiteFromConfig(site)
-	blockSitesStrict(configFilePath, false)
+	status, err := getBlockCustomTimeStatus()
+	if status == "true" {
+		if err != nil {
+			fmt.Printf("Error getting block status: %v\n", err)
+			return // Exit or handle the error as needed
+		}
+
+		// If blocking is active, get the ending time
+		endTime, err := getEndingTime()
+		if err != nil {
+			fmt.Println("Error getting ending time:", err)
+			return
+		}
+
+		// Parse the ending time
+		parsedEndTime, err := time.Parse(DateTimeLayout, endTime)
+		if err != nil {
+			fmt.Println("Error parsing end time:", err)
+			return
+		}
+		cleanupStrict()
+		removeBlockedSiteFromConfig(site)
+		blockSitesCustomTime(configFilePath, false, parsedEndTime)
+	} else {
+		cleanupStrict()
+		removeBlockedSiteFromConfig(site)
+		blockSitesStrict(configFilePath, false)
+	}
 }
 
 // Function to get block on restart status in yaml
@@ -555,5 +580,20 @@ func switchingStrictModeMenu(reader *bufio.Reader) {
 		}
 	} else {
 		fmt.Println("Invalid choice. Please try again.")
+	}
+}
+
+func printAllSites() {
+	// Read the configuration from the YAML file
+	config, err := readConfig(configFilePath)
+	if err != nil {
+		fmt.Printf("Error reading config file: %v\n", err)
+		return
+	}
+
+	// Print the sites
+	fmt.Println("Blocked Sites:")
+	for _, site := range config.Sites {
+		fmt.Println("- " + site)
 	}
 }
