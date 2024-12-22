@@ -65,6 +65,7 @@ func showSchedules(filepath string) {
 func showMenu() {
 	time.Sleep(200 * time.Millisecond)
 	fmt.Println("\n\n **********Self Control Menu**********")
+	fmt.Println("0: Block for specific time")
 	fmt.Println("1: Block sites using the schedule")
 	fmt.Println("2: Show current status")
 	fmt.Println("3: Enter strict mode")
@@ -394,14 +395,14 @@ func main() {
 
 	reader := bufio.NewReader(os.Stdin)
 
-	// //Verify password before allowing access
-	// for {
-	// 	if !verifyPassword(reader) {
-	// 		fmt.Println("Access denied")
-	// 	} else {
-	// 		break
-	// 	}
-	// }
+	//Verify password before allowing access
+	for {
+		if !verifyPassword(reader) {
+			fmt.Println("Access denied")
+		} else {
+			break
+		}
+	}
 
 	// Check if service is enabled
 	if !checkForServiceFile() {
@@ -449,10 +450,7 @@ func main() {
 		showMenu()
 		choice := readUserInput(reader)
 		switch choice {
-		case "map":
-			fmt.Println(goroutineContexts)
-			fmt.Println("Number of goroutines: ", len(goroutineContexts))
-		case "q":
+		case "0":
 			fmt.Println("Block for specific time")
 			duration := getDuration(reader)
 
@@ -461,8 +459,6 @@ func main() {
 
 			// Call the blockSitesCustomTime function with the calculated expiry time
 			blockSitesCustomTime(configFilePath, false, expiryTime)
-		case "w":
-			cleanupStrict()
 		case "1":
 			if mode, err := checkMode(); err == nil && mode == "strict" && len(goroutineContexts) > 0 {
 				fmt.Println("Wait until strict mode is done before starting schedule")

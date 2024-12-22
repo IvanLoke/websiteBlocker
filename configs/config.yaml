@@ -23,7 +23,7 @@ schedules:
           end: "14:37"
 current_status:
     started_at: time.....
-    ended_at: 2024-12-22 21:42:16 +0700
+    ended_at: 2024-12-22 21:40:45 +0700
     mode: normal
     block_on_restart: "false"
     block_custom_time: "false"
