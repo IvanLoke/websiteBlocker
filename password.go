@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"golang.org/x/crypto/bcrypt"
+	"golang.org/x/term"
 )
 
 func getPasswordFilePath() string {
@@ -103,8 +104,16 @@ func verifyPassword(reader *bufio.Reader) bool {
 
 	// Get password from user
 	fmt.Print("Enter password: ")
-	password, _ := reader.ReadString('\n')
-	password = strings.TrimSpace(password)
+	bytePassword, err := term.ReadPassword(int(os.Stdin.Fd()))
+	if err != nil {
+		fmt.Println("\nError reading password:", err)
+		return false
+	}
+
+	fmt.Println() // Print a newline after password input
+
+	// Convert bytePassword to string and trim any whitespace
+	password := strings.TrimSpace(string(bytePassword))
 
 	// Verify password
 	if !checkPassword(password, string(hashedBytes)) {

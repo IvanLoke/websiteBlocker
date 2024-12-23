@@ -430,6 +430,7 @@ func main() {
 		backgroundBlocker(true)
 		return
 	}
+
 	// Set up signal handling for graceful shutdown
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
@@ -454,6 +455,12 @@ func main() {
 		} else {
 			break
 		}
+	}
+
+	// Remove blocked sites that have expired
+	err := removedExpiredBlocks()
+	if err != nil {
+		fmt.Printf("Error removing expired blocks: %v\n", err)
 	}
 
 	for {
@@ -575,7 +582,9 @@ func main() {
 			wgRemove.Wait()
 			return
 		case "15": // Start process in background
-			startBackground()
+			if len(goroutineContexts) > 0 {
+				startBackground()
+			}
 			return
 		default:
 			fmt.Println("Invalid option")
