@@ -377,3 +377,46 @@ func writeAndSave(filename string, data interface{}) error {
 
 	return nil
 }
+
+func removedExpiredBlocks() error {
+	headerSite, err := readBlockedYamlFile(absolutePathToSelfControl + "/configs/blocked-sites.yaml")
+	if err != nil {
+		return err
+	}
+	for _, site := range headerSite.Sites {
+		if site.CurrentlyBlocked {
+			expiryTime, err := time.Parse(DateTimeLayout, site.Duration)
+			if err != nil {
+				fmt.Println("Error parsing expiry time: ", err)
+				continue
+			}
+			if time.Now().After(expiryTime) {
+				if err := editblockedStatusOnYamlFile(absolutePathToSelfControl+"/configs/blocked-sites.yaml", site.URL, false); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func addBackgroundBlocks() {
+	checkAndCleanupExistingInstance()
+	headerSite, err := readBlockedYamlFile(absolutePathToSelfControl + "/configs/blocked-sites.yaml")
+	if err != nil {
+		fmt.Println("Error reading blocked sites yaml file: ", err)
+		return
+	}
+	for _, site := range headerSite.Sites {
+		if site.CurrentlyBlocked {
+			expiryTime, err := time.Parse(DateTimeLayout, site.Duration)
+			if err != nil {
+				fmt.Println("Error parsing expiry time: ", err)
+				continue
+			}
+			if time.Now().Before(expiryTime) {
+				blockSites(false, absolutePathToSelfControl+"/configs/blocked-sites.yaml", site.URL, expiryTime, false)
+			}
+		}
+	}
+}
