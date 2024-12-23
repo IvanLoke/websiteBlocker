@@ -399,3 +399,24 @@ func removedExpiredBlocks() error {
 	}
 	return nil
 }
+
+func addBackgroundBlocks() {
+	checkAndCleanupExistingInstance()
+	headerSite, err := readBlockedYamlFile(absolutePathToSelfControl + "/configs/blocked-sites.yaml")
+	if err != nil {
+		fmt.Println("Error reading blocked sites yaml file: ", err)
+		return
+	}
+	for _, site := range headerSite.Sites {
+		if site.CurrentlyBlocked {
+			expiryTime, err := time.Parse(DateTimeLayout, site.Duration)
+			if err != nil {
+				fmt.Println("Error parsing expiry time: ", err)
+				continue
+			}
+			if time.Now().Before(expiryTime) {
+				blockSites(false, absolutePathToSelfControl+"/configs/blocked-sites.yaml", site.URL, expiryTime, false)
+			}
+		}
+	}
+}

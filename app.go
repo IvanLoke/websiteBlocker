@@ -463,6 +463,8 @@ func main() {
 		fmt.Printf("Error removing expired blocks: %v\n", err)
 	}
 
+	addBackgroundBlocks()
+
 	for {
 		wgRemove.Wait()
 		showMenu()
