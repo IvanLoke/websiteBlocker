@@ -49,19 +49,6 @@ type Schedule struct {
 	EndTime   string   `yaml:"endTime"`
 }
 
-// Function to show schedules from yaml file
-func showSchedules(filepath string) {
-	schedule, err := readScheduleYamlFile(filepath)
-	if err != nil {
-		fmt.Println("Error reading schedule file: ", err)
-		return
-	}
-	for i, s := range schedule.Schedules {
-		fmt.Println("***Schedule ", i+1, " ***")
-		printScheduleInfo(s)
-	}
-}
-
 func showMenu() {
 	time.Sleep(200 * time.Millisecond)
 	fmt.Println("\n\n **********Self Control Menu**********")
@@ -81,112 +68,6 @@ func showMenu() {
 func readUserInput(reader *bufio.Reader) string {
 	input, _ := reader.ReadString('\n')
 	return strings.TrimSpace(input)
-}
-
-// Function to block sites using the specified YAML file and update the /etc/hosts file
-func blockSites(all bool, yamlFile string, specificSite string, expiryTime time.Time, isInBackground bool) error {
-	var sites []string
-
-	// Read sites from the specified YAML file
-	headerSites, err := readBlockedYamlFile(yamlFile)
-	if err != nil {
-		return fmt.Errorf("error reading YAML file: %w", err)
-	}
-
-	if all {
-
-		// Prepare hosts file entries
-		for _, site := range headerSites.Sites {
-			sites = append(sites, site.URL)
-			editblockedStatusOnYamlFile(yamlFile, site.URL, true)
-			addNewGoroutine(site.URL, expiryTime, isInBackground)
-		}
-	} else {
-		sites = append(sites, specificSite)
-		addNewGoroutine(specificSite, expiryTime, isInBackground)
-		editblockedStatusOnYamlFile(yamlFile, specificSite, true)
-	}
-
-	// Update the hosts file with the new entries
-	if err := updateHostsFile(sites); err != nil {
-		return fmt.Errorf("error updating hosts file: %w", err)
-	}
-
-	return nil
-}
-
-// Removes entries inside etc/hosts that were added by selfcontrol and updates the yaml file
-func cleanup(all bool, url string) error {
-	hostsMu.Lock()         // Lock the mutex
-	defer hostsMu.Unlock() // Ensure it gets unlocked at the end
-
-	// Read etc/hosts file
-	content, err := os.ReadFile(hostsFile)
-	if err != nil {
-		return fmt.Errorf("error reading hosts file: %v", err)
-	}
-
-	if !all && url == "" {
-		return fmt.Errorf("empty URL")
-	}
-
-	// Read sites from the specified YAML file
-	var sites []string
-	if all {
-		headerSites, err := readBlockedYamlFile(absolutePathToSelfControl + "/configs/blocked-sites.yaml")
-		if err != nil {
-			return err
-		}
-
-		// Prepare hosts file entries
-		for _, site := range headerSites.Sites {
-			sites = append(sites, site.URL)
-			editblockedStatusOnYamlFile(absolutePathToSelfControl+"/configs/blocked-sites.yaml", site.URL, false)
-			removeGouroutine(site.URL)
-		}
-	} else {
-		sites = append(sites, url)
-		if err := editblockedStatusOnYamlFile(blockedSitesFilePath, url, false); err != nil {
-			return err
-		}
-		removeGouroutine(url)
-	}
-
-	// Removing entries
-	lines := strings.Split(string(content), "\n")
-	var newLines []string
-	removeExtraLine := false
-	for _, line := range lines {
-		if !all && strings.Contains(line, "# Added by selfcontrol") {
-			newLines = append(newLines, line)
-			continue
-		}
-		if !strings.Contains(line, "# Added by selfcontrol") {
-			shouldKeep := true
-			for i := 0; i < len(sites); {
-				site := sites[i]
-				if strings.Contains(line, site) {
-					// Remove the site from the sites array
-					sites = append(sites[:i], sites[i+1:]...) // Remove the matched site
-					shouldKeep = false
-					break
-				} else {
-					i++ // Only increment if no removal
-				}
-			}
-			if shouldKeep {
-				newLines = append(newLines, line)
-			}
-		} else {
-			removeExtraLine = true
-		}
-	}
-
-	if all && removeExtraLine {
-		newLines = newLines[:len(newLines)-1]
-	}
-	// Write back to hosts file
-	return os.WriteFile(hostsFile, []byte(strings.Join(newLines, "\n")), 0644)
 }
 
 func removeBlockedSiteFromHostsFile(all bool, content []byte) error {

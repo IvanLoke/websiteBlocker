@@ -233,7 +233,7 @@ func cleanupStrict() error {
 	// Read sites from the specified YAML file
 	var sites []string
 	// Prepare hosts file entries
-	headerSites, err := readConfig(absolutePathToSelfControl + "/configs/config.yaml")
+	headerSites, err := readConfig(configFilePath)
 	if err != nil {
 		return err
 	}
@@ -277,7 +277,6 @@ func cleanupStrict() error {
 
 // Function to remove site from the config.yaml file
 func removeBlockedSiteFromConfig(site string) error {
-	configFilePath := absolutePathToSelfControl + "/configs/config.yaml"
 
 	// Read the current config
 	config, err := readConfig(configFilePath)
@@ -317,8 +316,6 @@ func checkMode() (string, error) {
 
 // Switch mode from strict to normal and vice versa
 func switchModeStrict(option int) error {
-	configFilePath := absolutePathToSelfControl + "/configs/config.yaml"
-
 	// Read the current config
 	config, err := readConfig(configFilePath)
 	if err != nil {
@@ -360,7 +357,7 @@ func backgroundBlocker(startup bool) {
 	fmt.Println("Time started: ", parsedTime)
 	var path string
 	if startup {
-		path = absolutePathToSelfControl + "/configs/config.yaml"
+		path = configFilePath
 		// Write the PID to selfcontrol.lock in tmp
 		pid := os.Getpid()
 		lockFilePath := absolutePathToSelfControl + "/tmp/selfcontrol.lock"
@@ -369,7 +366,7 @@ func backgroundBlocker(startup bool) {
 			return
 		}
 	} else {
-		path = absolutePathToSelfControl + "/configs/config.yaml"
+		path = configFilePath
 	}
 
 	// Check if it is blocking based on time or schedule
