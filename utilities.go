@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -92,6 +93,15 @@ func getDuration(reader *bufio.Reader) time.Duration {
 	}
 }
 
+// Function to check if the current time is within the specified time range
+func isTimeInRange(currentTime, start, end string) bool {
+	current, _ := time.Parse("15:04", currentTime)
+	startTime, _ := time.Parse("15:04", start)
+	endTime, _ := time.Parse("15:04", end)
+
+	return current.After(startTime) && current.Before(endTime)
+}
+
 func checkForServiceFile() bool {
 	_, err := os.Stat("/etc/systemd/system/selfcontrol.service")
 	if err != nil {
@@ -173,4 +183,19 @@ func initAbsPathToSelfControl() {
 	}
 
 	log.Println("Updated constants file successfully.")
+}
+
+func getDirectoryPaths() (executablePath string, executableDirectory string) {
+	exePath, err := os.Executable()
+	if err != nil {
+		fmt.Printf("Error getting executable path: %v\n", err)
+		return
+	}
+
+	// Optionally, get the directory of the executable
+	exeDir := filepath.Dir(exePath)
+
+	fmt.Printf("Executable Path: %s\n", exePath)
+	fmt.Printf("Executable Directory: %s\n", exeDir)
+	return exePath, exeDir
 }

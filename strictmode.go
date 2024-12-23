@@ -7,8 +7,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"gopkg.in/yaml.v3"
 )
 
 // Struct to hold the YAML data
@@ -29,21 +27,6 @@ type CurrentStatus struct {
 type TimeRange struct {
 	Start string `yaml:"start"`
 	End   string `yaml:"end"`
-}
-
-// Function to read the config file
-func readConfig(filePath string) (*Config, error) {
-	data, err := os.ReadFile(filePath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read YAML file: %w", err)
-	}
-
-	var config Config
-	if err := yaml.Unmarshal(data, &config); err != nil {
-		return nil, fmt.Errorf("failed to parse YAML file: %w", err)
-	}
-
-	return &config, nil
 }
 
 // Function that prints sites to block if it is time to block sites. Returns the end time of the block
@@ -73,39 +56,6 @@ func printSitesToBlock(config *Config, forStatus bool) (string, error) {
 		// Return an error if no schedules were found or no sites to block
 		return "", fmt.Errorf("no schedules found for %s", currentDay)
 	}
-}
-
-// Function to return the expirytime of the config yaml if it is in a schedule
-func getExpiryTime() (string, error) {
-	configs, err := readConfig(configFilePath)
-	if err != nil {
-		return "", err
-	}
-	currentDay := strings.ToLower(time.Now().Weekday().String()) // Get the current day of the week
-	currentTime := time.Now().Format("15:04")                    // Get current time in HH:MM format
-
-	// Check if there are schedules for the current day
-	if schedules, exists := configs.Schedules[currentDay]; exists {
-		for _, schedule := range schedules {
-			// Check if the current time falls within any of the scheduled time ranges
-			if isTimeInRange(currentTime, schedule.Start, schedule.End) {
-				return schedule.End, nil // Exit after printing sites for the current time range
-			}
-		}
-		return "", fmt.Errorf("no sites are being blocked now") // Return an error if no sites were found
-	} else {
-		// Return an error if no schedules were found or no sites to block
-		return "", fmt.Errorf("no schedules found for %s", currentDay)
-	}
-}
-
-// Function to check if the current time is within the specified time range
-func isTimeInRange(currentTime, start, end string) bool {
-	current, _ := time.Parse("15:04", currentTime)
-	startTime, _ := time.Parse("15:04", start)
-	endTime, _ := time.Parse("15:04", end)
-
-	return current.After(startTime) && current.Before(endTime)
 }
 
 func blockSitesCustomTime(yamlFile string, isInBackground bool, expiryTime time.Time) error {
@@ -168,57 +118,6 @@ func blockSitesStrict(yamlFile string, isInBackground bool) error {
 	return nil
 }
 
-// Function to get ending time for custom time in yaml
-func getEndingTime() (string, error) {
-	config, err := readConfig(configFilePath)
-	if err != nil {
-		return "", err
-	}
-	return config.CurrentStatus.EndedAt, nil
-}
-
-// Function to edit ending time for custom time in yaml
-func editEndingTime(newEndingTime string) {
-	config, err := readConfig(configFilePath)
-	if err != nil {
-		fmt.Println("Error reading config file: ", err)
-		return
-	}
-
-	// Update the ending_at field in current_status
-	config.CurrentStatus.EndedAt = newEndingTime
-
-	// Write the updated configuration back to the YAML file
-	if err := writeAndSave(configFilePath, config); err != nil {
-		fmt.Printf("Error writing config file: %v\n", err)
-		return
-	}
-}
-
-// Function to get custom time blocking status in yaml
-func getBlockCustomTimeStatus() (string, error) {
-	config, err := readConfig(configFilePath)
-	if err != nil {
-		return "", err
-	}
-	return config.CurrentStatus.BlockCustomTime, nil
-}
-
-// Function to change blockcustomtime status in yaml true or false
-func editBlockCustomTimeStatus(status string) {
-	config, err := readConfig(configFilePath)
-	if err != nil {
-		fmt.Printf("Error reading config file: %v\n", err)
-		return
-	}
-	config.CurrentStatus.BlockCustomTime = status
-	if err := writeAndSave(configFilePath, config); err != nil {
-		fmt.Printf("Error writing to config file: %v\n", err)
-		return
-	}
-	fmt.Println("Block custom time status changed successfully")
-}
-
 // Function to remove all goroutines and cleanup the hosts file, sets blockcustomtime status to false
 func cleanupStrict() error {
 	hostsMu.Lock()         // Lock the mutex
@@ -273,45 +172,6 @@ func cleanupStrict() error {
 	}
 	// Write back to hosts file
 	return os.WriteFile(hostsFile, []byte(strings.Join(newLines, "\n")), 0644)
-}
-
-// Function to remove site from the config.yaml file
-func removeBlockedSiteFromConfig(site string) error {
-
-	// Read the current config
-	config, err := readConfig(configFilePath)
-	if err != nil {
-		return err
-	}
-
-	found := false
-	// Removing the site from the config
-	for i, s := range config.Sites {
-		if strings.EqualFold(s, site) { // Case insensitive comparison
-			config.Sites = append(config.Sites[:i], config.Sites[i+1:]...) // Remove the site
-			found = true
-			break
-		}
-	}
-	if !found {
-		return fmt.Errorf("site %s not found in the config", site)
-	}
-	// Write the updated data back to the YAML file
-	if err := writeAndSave(configFilePath, config); err != nil {
-		return fmt.Errorf("failed to write updated config to file: %w", err)
-	}
-
-	fmt.Println("Successfully removed site:", site)
-	return nil
-}
-
-// Function to check current mode of the application, returns mode in string format
-func checkMode() (string, error) {
-	config, err := readConfig(configFilePath)
-	if err != nil {
-		return "", err
-	}
-	return config.CurrentStatus.Mode, nil
 }
 
 // Switch mode from strict to normal and vice versa
@@ -403,27 +263,7 @@ func backgroundBlocker(startup bool) {
 	fmt.Println("Background blocking completed")
 }
 
-func addNewSiteToConfig(site string) {
-	config, err := readConfig(configFilePath)
-	if err != nil {
-		fmt.Printf("Error reading config file: %v\n", err)
-		return
-	}
-
-	for _, existingSite := range config.Sites {
-		if strings.EqualFold(existingSite, site) { // Case insensitive comparison
-			fmt.Println("This site is already in the configuration.")
-			return
-		}
-	}
-
-	config.Sites = append(config.Sites, site)
-	if err := writeAndSave(configFilePath, config); err != nil {
-		fmt.Printf("Error writing to config file: %v\n", err)
-		return
-	}
-	fmt.Println("Site added successfully")
-}
+// Menu to edit blocking when in normal mode
 func normalModeMenu() {
 	time.Sleep(210 * time.Millisecond)
 	fmt.Println("\n**********Normal Mode**********")
@@ -434,6 +274,7 @@ func normalModeMenu() {
 	fmt.Printf("Enter your choice: ")
 }
 
+// Function to query user for site to block, returns site to block/unblock
 func queryForSchedule(reader *bufio.Reader) string {
 	config, err := readConfig(configFilePath)
 	if err != nil {
@@ -452,64 +293,6 @@ func queryForSchedule(reader *bufio.Reader) string {
 		return ""
 	}
 	return config.Sites[index-1]
-}
-
-func deleteSiteFromConfig(reader *bufio.Reader) {
-	site := queryForSchedule(reader)
-	removeBlockedSiteFromConfig(site)
-}
-func deleteAndUnblockSiteFromConfig(reader *bufio.Reader) {
-	site := queryForSchedule(reader)
-	status, err := getBlockCustomTimeStatus()
-	if status == "true" {
-		if err != nil {
-			fmt.Printf("Error getting block status: %v\n", err)
-			return // Exit or handle the error as needed
-		}
-
-		// If blocking is active, get the ending time
-		endTime, err := getEndingTime()
-		if err != nil {
-			fmt.Println("Error getting ending time:", err)
-			return
-		}
-
-		// Parse the ending time
-		parsedEndTime, err := time.Parse(DateTimeLayout, endTime)
-		if err != nil {
-			fmt.Println("Error parsing end time:", err)
-			return
-		}
-		cleanupStrict()
-		removeBlockedSiteFromConfig(site)
-		blockSitesCustomTime(configFilePath, false, parsedEndTime)
-	} else {
-		cleanupStrict()
-		removeBlockedSiteFromConfig(site)
-		blockSitesStrict(configFilePath, false)
-	}
-}
-
-// Function to get block on restart status in yaml
-func getBlockOnRestartStatus() (string, error) {
-	config, err := readConfig(configFilePath)
-	if err != nil {
-		return "", err
-	}
-	return config.CurrentStatus.BlockOnRestart, nil
-}
-func changeBlockOnRestartStatus(status string) {
-	config, err := readConfig(configFilePath)
-	if err != nil {
-		fmt.Printf("Error reading config file: %v\n", err)
-		return
-	}
-	config.CurrentStatus.BlockOnRestart = status
-	if err := writeAndSave(configFilePath, config); err != nil {
-		fmt.Printf("Error writing to config file: %v\n", err)
-		return
-	}
-	fmt.Println("Block on restart status changed successfully")
 }
 
 // Function that checks strict mode and blocks access if it is
@@ -577,47 +360,5 @@ func switchingStrictModeMenu(reader *bufio.Reader) {
 		}
 	} else {
 		fmt.Println("Invalid choice. Please try again.")
-	}
-}
-
-func printAllSites() {
-	// Define the path to the hosts file
-	hostsFilePath := "/etc/hosts" // Adjust this path if necessary
-
-	// Read the contents of the hosts file
-	content, err := os.ReadFile(hostsFilePath)
-	if err != nil {
-		fmt.Printf("Error reading hosts file: %v\n", err)
-		return
-	}
-
-	// Split the content into lines
-	lines := strings.Split(string(content), "\n")
-	fmt.Println("Blocked Sites:")
-
-	// Flag to indicate whether we're in the relevant section
-	inSelfControlSection := false
-
-	for _, line := range lines {
-		// Check for the start of the self-control section
-		if strings.Contains(line, "# Added by selfcontrol") {
-			inSelfControlSection = true
-			continue // Skip the line with the comment
-		}
-
-		// If we are in the self-control section, print the sites
-		if inSelfControlSection {
-			// Ignore comments and empty lines
-			if strings.HasPrefix(line, "#") || strings.TrimSpace(line) == "" {
-				continue
-			}
-
-			// Split the line into parts
-			parts := strings.Fields(line)
-			if len(parts) > 1 && parts[0] == "127.0.0.1" {
-				// The second part is the URL to block
-				fmt.Println("- " + parts[1])
-			}
-		}
 	}
 }

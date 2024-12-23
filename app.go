@@ -7,8 +7,6 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
-	"path/filepath"
-	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -68,53 +66,6 @@ func showMenu() {
 func readUserInput(reader *bufio.Reader) string {
 	input, _ := reader.ReadString('\n')
 	return strings.TrimSpace(input)
-}
-
-func removeBlockedSiteFromHostsFile(all bool, content []byte) error {
-	var sites []string
-	if all {
-		headerSites, err := readConfig(configFilePath)
-		if err != nil {
-			return err
-		}
-
-		// Prepare hosts file entries
-		sites = append(sites, headerSites.Sites...)
-	}
-	lines := strings.Split(string(content), "\n")
-	var newLines []string
-	removeExtraLine := false
-	for _, line := range lines {
-		if !all && strings.Contains(line, "# Added by selfcontrol") {
-			newLines = append(newLines, line)
-			continue
-		}
-		if !strings.Contains(line, "# Added by selfcontrol") {
-			shouldKeep := true
-			for i := 0; i < len(sites); {
-				site := sites[i]
-				if strings.Contains(line, site) {
-					// Remove the site from the sites array
-					sites = append(sites[:i], sites[i+1:]...) // Remove the matched site
-					shouldKeep = false
-					break
-				} else {
-					i++ // Only increment if no removal
-				}
-			}
-			if shouldKeep {
-				newLines = append(newLines, line)
-			}
-		} else {
-			removeExtraLine = true
-		}
-	}
-
-	if all && removeExtraLine {
-		newLines = newLines[:len(newLines)-1]
-	}
-	// Write back to hosts file
-	return os.WriteFile(hostsFile, []byte(strings.Join(newLines, "\n")), 0644)
 }
 
 // Function to add new goroutine when editing or adding to yaml file
@@ -493,20 +444,6 @@ normalModeLoop:
 		}
 	}
 }
-func getDirectoryPaths() (executablePath string, executableDirectory string) {
-	exePath, err := os.Executable()
-	if err != nil {
-		fmt.Printf("Error getting executable path: %v\n", err)
-		return
-	}
-
-	// Optionally, get the directory of the executable
-	exeDir := filepath.Dir(exePath)
-
-	fmt.Printf("Executable Path: %s\n", exePath)
-	fmt.Printf("Executable Directory: %s\n", exeDir)
-	return exePath, exeDir
-}
 
 // Function to start the application in the background while in main function
 func startBackground() {
@@ -556,6 +493,7 @@ func startBackground() {
 	fmt.Println("Selfcontrol started in background")
 }
 
+// Menu for editing configs
 func editConfigMenu() {
 	fmt.Println("\n\n **********Edit Schedule Menu**********")
 	fmt.Println("1: Add new site to config")
@@ -566,6 +504,7 @@ func editConfigMenu() {
 	fmt.Print("Choose an option: ")
 }
 
+// Switch case logic for editing configs
 func editConfigSelection(reader *bufio.Reader) {
 editScheduleLoop:
 	for {
@@ -593,22 +532,7 @@ editScheduleLoop:
 	}
 }
 
-func displaySchedule() {
-	config, err := readConfig(configFilePath)
-	if err != nil {
-		fmt.Println("Error reading config file: ", err)
-		return
-	}
-
-	fmt.Println("\n*** Schedule for Blocking Sites ***")
-	for day, schedules := range config.Schedules {
-		fmt.Printf("%s:\n", strings.ToUpper(day))
-		for i, schedule := range schedules {
-			fmt.Printf("  %d: Start: %s, End: %s\n", i+1, schedule.Start, schedule.End)
-		}
-	}
-}
-
+// Menu for editing schedules
 func editScheduleMenu() {
 	fmt.Println("\n\n **********Edit Schedule Menu**********")
 	fmt.Println("1: Add new site to schedule")
@@ -623,6 +547,7 @@ func editScheduleMenu() {
 	fmt.Printf("Choose an option: ")
 }
 
+// Switch case logic for editing schedules
 func editScheduleSelection(reader *bufio.Reader) {
 editScheduleLoop:
 	for {
@@ -655,317 +580,4 @@ editScheduleLoop:
 			fmt.Println("Invalid option")
 		}
 	}
-}
-
-func editTimeforSchedule(start bool, reader *bufio.Reader) {
-	config, err := readConfig(configFilePath)
-	if err != nil {
-		fmt.Println("Error reading config file: ", err)
-		return
-	}
-
-	// Display the days with schedules
-	fmt.Println("Available days in the schedule:")
-	for day := range config.Schedules {
-		fmt.Printf(" %s\n", day)
-
-	}
-	// Get user choice for the day
-	fmt.Print("Enter the day you want to edit: ")
-	selectedDay := FormatString(readUserInput(reader))
-
-	// Check if the selected day exists
-	if _, exists := config.Schedules[selectedDay]; !exists {
-		fmt.Println("Invalid day selected.")
-		return
-	}
-
-	// Display the start and end times for the selected day
-	fmt.Printf("Schedules for %s:\n", selectedDay)
-	for i, schedule := range config.Schedules[selectedDay] {
-		fmt.Printf("%d: Start: %s, End: %s\n", i+1, schedule.Start, schedule.End)
-	}
-
-	// Get user choice for which time to edit
-	fmt.Print("Enter the index of the schedule you want to edit: ")
-	choice := FormatString(readUserInput(reader))
-	selectedIndex, err := strconv.Atoi(choice)
-	if err != nil || selectedIndex < 1 || selectedIndex > len(config.Schedules[selectedDay]) {
-		fmt.Println("Invalid index selected.")
-		return
-	}
-	var timeType string
-	if start {
-		timeType = "start"
-	} else {
-		timeType = "end"
-	}
-	// Get the new time
-	fmt.Print("Enter new time in 24H format (HH:MM): ")
-	unformattedtime := readUserInput(reader)
-	newTime, err := FormatTime(unformattedtime)
-	if err != nil {
-		fmt.Println("Error: ", err)
-		return
-	}
-
-	// Update the schedule based on user choice
-	scheduleIndex := selectedIndex - 1 // Convert to zero-based index
-	if timeType == "start" {
-		err := checkStartBeforeEnd(newTime, config.Schedules[selectedDay][scheduleIndex].End)
-		if err != nil {
-			fmt.Println("Error: ", err)
-			return
-		}
-		config.Schedules[selectedDay][scheduleIndex].Start = newTime
-
-	} else if timeType == "end" {
-		err := checkStartBeforeEnd(config.Schedules[selectedDay][scheduleIndex].Start, newTime)
-		if err != nil {
-			fmt.Println("Error: ", err)
-			return
-		}
-		config.Schedules[selectedDay][scheduleIndex].End = newTime
-	} else {
-		fmt.Println("Invalid option. Please enter 'start' or 'end'.")
-		return
-	}
-
-	// Write the updated configuration back to the YAML file
-	if err := writeAndSave(configFilePath, config); err != nil {
-		fmt.Printf("Error writing config file: %v\n", err)
-		return
-	}
-
-	fmt.Printf("Successfully updated the %s time for %s to %s.\n", timeType, selectedDay, newTime)
-}
-
-func addDayToSchedule(reader *bufio.Reader) {
-	config, err := readConfig(configFilePath)
-	if err != nil {
-		fmt.Println("Error reading config file: ", err)
-		return
-	}
-
-	// Prompt for the new day to add and check if its a valid day
-	fmt.Print("Enter the day you want to add (e.g., 'saturday'): ")
-	newDay := FormatString(readUserInput(reader))
-	validDay := false
-	for _, day := range daysOfWeek {
-		if strings.EqualFold(newDay, day) {
-			validDay = true
-			break
-		}
-	}
-	if !validDay {
-		fmt.Println("Invalid day entered.")
-		return
-	}
-	// Check if the day already exists
-	if _, exists := config.Schedules[newDay]; exists {
-		fmt.Println("This day already exists in the schedule.")
-		return
-	}
-
-	// Initialize a slice to hold time ranges
-	timeRanges := []TimeRange{}
-
-	// Loop to add time ranges
-	for {
-		var startTime, endTime string
-
-		// Get start time
-		fmt.Print("Enter start time (HH:MM): ")
-		startTime = readUserInput(reader)
-		startTime, err = FormatTime(startTime)
-		if err != nil {
-			fmt.Println("Error formatting time: ", err)
-			return
-		}
-
-		// Get end time
-		fmt.Print("Enter end time (HH:MM): ")
-		endTime = (readUserInput(reader))
-
-		endTime, err = FormatTime(endTime)
-		if err != nil {
-			fmt.Println("Error formatting time: ", err)
-			return
-		}
-
-		err := checkStartBeforeEnd(startTime, endTime)
-		if err != nil {
-			fmt.Println("Error: ", err)
-			return
-		}
-		// Append the new time range to the slice
-		timeRanges = append(timeRanges, TimeRange{Start: startTime, End: endTime})
-
-		// Ask if the user wants to add another time range
-		fmt.Print("Do you want to add another time range? (yes/no): ")
-		another := FormatString(readUserInput(reader))
-		if strings.ToLower(another) != "yes" {
-			break
-		}
-	}
-
-	// Add the new day and its time ranges to the schedule
-	config.Schedules[newDay] = timeRanges
-
-	// Write the updated configuration back to the YAML file
-	if err := writeAndSave(configFilePath, config); err != nil {
-		fmt.Printf("Error writing config file: %v\n", err)
-		return
-	}
-
-	fmt.Printf("Successfully added %s with its time ranges to the schedule.\n", newDay)
-}
-
-func deleteDayFromSchedule(reader *bufio.Reader) {
-	config, err := readConfig(configFilePath)
-	if err != nil {
-		fmt.Println("Error reading config file: ", err)
-		return
-	}
-
-	fmt.Println("Available days in the schedule:")
-	for day := range config.Schedules {
-		fmt.Println(day)
-	}
-	// Prompt for the day to delete and check if it's a valid day
-	fmt.Print("Enter the day you want to delete (e.g., 'saturday'): ")
-	dayToDelete := FormatString(readUserInput(reader))
-
-	// Check if the day exists
-	if _, exists := config.Schedules[dayToDelete]; !exists {
-		fmt.Println("This day does not exist in the schedule.")
-		return
-	}
-
-	// Confirm deletion
-	fmt.Printf("Are you sure you want to delete the schedule for %s? (yes/no): ", dayToDelete)
-	confirmation := FormatString(readUserInput(reader))
-	if strings.ToLower(confirmation) != "yes" {
-		fmt.Println("Deletion canceled.")
-		return
-	}
-
-	// Delete the day from the schedule
-	delete(config.Schedules, dayToDelete)
-
-	// Write the updated configuration back to the YAML file
-	if err := writeAndSave(configFilePath, config); err != nil {
-		fmt.Printf("Error writing config file: %v\n", err)
-		return
-	}
-
-	fmt.Printf("Successfully deleted the schedule for %s.\n", dayToDelete)
-}
-
-func addTimeRangeForDay(reader *bufio.Reader) {
-	config, err := readConfig(configFilePath)
-	if err != nil {
-		fmt.Println("Error reading config file: ", err)
-		return
-	}
-
-	for day := range config.Schedules {
-		fmt.Println(day)
-	}
-	// Prompt for the day to add a time range
-	fmt.Print("Enter the day you want to add a time range to (e.g., 'monday'): ")
-	selectedDay := FormatString(readUserInput(reader))
-
-	// Check if the selected day exists
-	if _, exists := config.Schedules[selectedDay]; !exists {
-		fmt.Println("Invalid day selected.")
-		return
-	}
-
-	// Get start time
-	fmt.Print("Enter start time (HH:MM): ")
-	startTime := FormatString(readUserInput(reader))
-	startTimeFormatted, err := FormatTime(startTime)
-	if err != nil {
-		fmt.Println("Error formatting time: ", err)
-		return
-	}
-
-	// Get end time
-	fmt.Print("Enter end time (HH:MM): ")
-	endTime := FormatString(readUserInput(reader))
-
-	// Validate end time format
-	endTimeFormatted, err := FormatTime(endTime)
-	if err != nil {
-		fmt.Println("Error formatting time: ", err)
-		return
-	}
-
-	errCheck := checkStartBeforeEnd(startTimeFormatted, endTimeFormatted)
-	if errCheck != nil {
-		fmt.Println("Error: ", errCheck)
-		return
-	}
-
-	// Append the new time range to the selected day's schedule
-	config.Schedules[selectedDay] = append(config.Schedules[selectedDay], TimeRange{Start: startTimeFormatted, End: endTimeFormatted})
-
-	// Write the updated configuration back to the YAML file
-	if err := writeAndSave(configFilePath, config); err != nil {
-		fmt.Printf("Error writing config file: %v\n", err)
-		return
-	}
-
-	fmt.Printf("Successfully added time range for %s: %s to %s.\n", selectedDay, startTime, endTime)
-}
-
-func deleteTimeRangeForDay(reader *bufio.Reader) {
-	config, err := readConfig(configFilePath)
-	if err != nil {
-		fmt.Println("Error reading config file: ", err)
-		return
-	}
-
-	fmt.Println("Available days in the schedule:")
-	for day := range config.Schedules {
-		fmt.Println(day)
-	}
-
-	// Prompt for the day to delete a time range
-	fmt.Print("Enter the day you want to delete a time range from (e.g., 'monday'): ")
-	selectedDay := FormatString(readUserInput(reader))
-
-	// Check if the selected day exists
-	if _, exists := config.Schedules[selectedDay]; !exists {
-		fmt.Println("Invalid day selected.")
-		return
-	}
-
-	// Display the current time ranges for the selected day
-	fmt.Printf("Current time ranges for %s:\n", selectedDay)
-	for i, schedule := range config.Schedules[selectedDay] {
-		fmt.Printf("%d: Start: %s, End: %s\n", i+1, schedule.Start, schedule.End)
-	}
-
-	// Get user choice for which time range to delete
-	fmt.Print("Enter the index of the time range you want to delete: ")
-	choice := FormatString(readUserInput(reader))
-	selectedIndex, err := strconv.Atoi(choice)
-	if err != nil || selectedIndex < 1 || selectedIndex > len(config.Schedules[selectedDay]) {
-		fmt.Println("Invalid index selected.")
-		return
-	}
-
-	// Remove the selected time range
-	scheduleIndex := selectedIndex - 1 // Convert to zero-based index
-	config.Schedules[selectedDay] = append(config.Schedules[selectedDay][:scheduleIndex], config.Schedules[selectedDay][scheduleIndex+1:]...)
-
-	// Write the updated configuration back to the YAML file
-	if err := writeAndSave(configFilePath, config); err != nil {
-		fmt.Printf("Error writing config file: %v\n", err)
-		return
-	}
-
-	fmt.Printf("Successfully deleted time range for %s.\n", selectedDay)
 }
